@@ -1,70 +1,199 @@
-# Getting Started with Create React App
+# Lifeline
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+**Where Faith meets Logic** ✨
 
-## Available Scripts
+A faith-based community dating and matchmaking application designed to connect people within religious communities through shared values and meaningful relationships.
 
-In the project directory, you can run:
+## Overview
 
-### `npm start`
+Lifeline is a full-stack application that facilitates authentic connections between individuals who share faith and religious values. The platform provides a secure, user-friendly experience for creating profiles, discovering matches, and building relationships within faith communities.
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+## Key Features
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+### 🔐 Authentication & User Management
 
-### `npm test`
+- User registration (signup) and login
+- Email verification workflow
+- Password reset functionality
+- JWT-based authentication with secure password hashing
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+### 👤 Comprehensive User Profiles
 
-### `npm run build`
+- Basic information (name, email, phone, gender)
+- Origin details (country, state, LGA)
+- Residence information (country, state, city, address)
+- Occupation and personal interests
+- Church affiliation and denomination
+- Subscription tier management
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+### 💕 Intelligent Matching System
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+Three matching preference options:
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+- **My Church** - Connect with members from your church
+- **My Church+** - Expand to extended church networks
+- **Other Churches** - Open to faith communities beyond your church
 
-### `npm run eject`
+### 💳 Subscription Model
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+- **Free Tier** - Basic features and limited matches
+- **Premium Tier** - Enhanced features and unlimited access
+- Subscription lifecycle management (active, expired, canceled)
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+## Tech Stack
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+### Backend
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+- **Runtime:** Node.js
+- **Framework:** Express.js
+- **Database:** PostgreSQL
+- **Authentication:** JWT + bcryptjs
+- **API:** RESTful with CORS support
+- **Environment:** dotenv for configuration
 
-## Learn More
+### Frontend
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
+- **Framework:** React 19
+- **Build Tool:** Vite
+- **Routing:** React Router
+- **Styling:** Tailwind CSS
+- **Testing:** Vitest with Testing Library
 
-To learn React, check out the [React documentation](https://reactjs.org/).
+## Project Structure
 
-### Code Splitting
+```
+lifeline/
+├── backend/
+│   ├── src/
+│   │   ├── index.js           # Express server entry point
+│   │   ├── config/            # Database configuration
+│   │   ├── controllers/       # Request handlers
+│   │   ├── middleware/        # Custom middleware (auth, etc)
+│   │   ├── models/            # Data models
+│   │   ├── routes/            # API routes
+│   │   ├── services/          # Business logic
+│   │   └── utils/             # Utility functions
+│   ├── schema/
+│   │   └── schema.sql         # PostgreSQL database schema
+│   └── package.json
+│
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx            # Main app component with routing
+│   │   ├── pages/             # Page components
+│   │   │   ├── LoginPage.jsx
+│   │   │   ├── SignupPage.jsx
+│   │   │   ├── ForgotPasswordPage.jsx
+│   │   │   ├── ResetPasswordPage.jsx
+│   │   │   └── ... (more pages)
+│   │   ├── features/
+│   │   │   └── auth/          # Auth feature components
+│   │   ├── components/        # Reusable UI components
+│   │   └── assets/            # Static assets
+│   └── package.json
+│
+└── README.md
+```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
+## Getting Started
 
-### Analyzing the Bundle Size
+### Prerequisites
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
+- Node.js (v16+)
+- PostgreSQL
+- npm or yarn
 
-### Making a Progressive Web App
+### Installation
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
+1. **Clone the repository**
 
-### Advanced Configuration
+   ```bash
+   git clone https://github.com/yourusername/lifeline.git
+   cd lifeline
+   ```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
+2. **Backend Setup**
 
-### Deployment
+   ```bash
+   cd backend
+   npm install
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
+   # Create .env file with your configuration
+   # Set DATABASE_URL, JWT_SECRET, PORT, etc.
 
-### `npm run build` fails to minify
+   npm run dev
+   ```
 
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+3. **Frontend Setup**
+
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+
+4. **Database Setup**
+   ```bash
+   # Run the schema.sql file in your PostgreSQL database
+   psql -U username -d database_name -f backend/schema/schema.sql
+   ```
+
+## API Endpoints
+
+### Authentication
+
+- `POST /api/auth/signup` - Register a new user
+- `POST /api/auth/login` - User login
+- `POST /api/auth/forgot-password` - Request password reset
+- `POST /api/auth/reset-password` - Reset password
+- `POST /api/auth/verify-email` - Verify email address
+
+## Development
+
+### Backend Scripts
+
+```bash
+npm start    # Production server
+npm run dev  # Development with nodemon
+npm test     # Run tests
+```
+
+### Frontend Scripts
+
+```bash
+npm run dev      # Start development server
+npm run build    # Build for production
+npm run lint     # Run ESLint
+npm run preview  # Preview production build
+npm test         # Run tests
+```
+
+## Database Schema
+
+The PostgreSQL schema includes:
+
+- **users table** - Core user data with all profile information
+- **Gender types** - Male, Female
+- **Match preferences** - my-church, my-church-plus, other-churches
+- **Subscription tiers** - free, premium
+- **Subscription status** - active, expired, canceled
+
+## Security Features
+
+- Password hashing with bcryptjs
+- JWT token-based authentication
+- Email verification workflow
+- CORS protection
+- Environment variable configuration for sensitive data
+
+## License
+
+ISC
+
+## Contact & Support
+
+For questions or support, please reach out to the development team.
+
+---
+
+**Lifeline** - Connecting hearts, building faith-based communities ❤️
