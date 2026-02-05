@@ -1,0 +1,69 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum GenderType {
+  Male
+  Female
+}
+
+enum MatchPreferenceType {
+  my_church
+  my_church_plus
+  other_churches
+}
+
+enum SubscriptionTierType {
+  free
+  premium
+}
+
+enum SubscriptionStatusType {
+  active
+  expired
+  canceled
+}
+
+model User {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  firstName String
+  lastName  String
+  email     String     @unique
+  phone     String?
+  password  String
+  gender    GenderType
+
+  originCountry String?
+  originState   String?
+  originLga     String?
+
+  residenceCountry String?
+  residenceState   String?
+  residenceCity    String?
+  residenceAddress String?
+
+  occupation      String?
+  interests       Json?
+  church          String?
+  matchPreference MatchPreferenceType?
+
+  subscriptionTier      SubscriptionTierType   @default(free)
+  subscriptionStatus    SubscriptionStatusType @default(active)
+  subscriptionExpiresAt DateTime?
+
+  isVerified Boolean  @default(false)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("users")
+}
