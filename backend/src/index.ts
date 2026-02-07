@@ -1,12 +1,10 @@
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
-import authRoutes from "./routes/authRoutes.js";
-
-dotenv.config();
+import authRoutes from "./routes/authRoutes";
+import env from "./config/env";
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = env.port;
 
 // Middleware
 app.use(cors());
@@ -22,5 +20,5 @@ app.get("/", (req, res) => {
 
 // Start Server
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+  console.log(`Server is running on http://localhost:${PORT}`);
 });

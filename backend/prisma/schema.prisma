@@ -1,8 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+// Prisma Schema - Clean Invite + Registration Flow
 
 generator client {
   provider = "prisma-client-js"
@@ -10,6 +6,21 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+// ============= ENUMS =============
+
+enum Role {
+  SuperAdmin
+  ChurchAdmin
+  Counselor
+  User
+}
+
+enum InviteType {
+  ChurchAdmin
+  Counselor
+  Church
 }
 
 enum GenderType {
@@ -34,36 +45,175 @@ enum SubscriptionStatusType {
   canceled
 }
 
-model User {
-  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+enum StatusType {
+  pending
+  active
+  suspended
+}
+
+// ============= AUTH TABLE =============
+
+model Account {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String   @unique
+  password  String
   firstName String
   lastName  String
-  email     String     @unique
   phone     String?
-  password  String
+  role      Role
+
+   // Email verification
+  isEmailVerified       Boolean   @default(false)
+  emailVerificationToken String?  @unique
+  emailVerificationExpiry DateTime?
+  
+  // Password reset
+  passwordResetToken  String?   @unique
+  passwordResetExpiry DateTime?
+  
+  status    StatusType @default(active)
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  // Role-specific profiles
+  superAdmin  SuperAdmin?
+  churchAdmin ChurchAdmin?
+  counselor   Counselor?
+  user        User?
+  
+  // Invites created by this account (if admin)
+  invitesCreated Invite[] @relation("CreatedBy")
+
+  @@map("accounts")
+}
+
+// ============= ROLE TABLES =============
+
+model SuperAdmin {
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId String  @unique @db.Uuid
+  
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  
+  churchesCreated Church[]
+
+  @@map("super_admins")
+}
+
+model ChurchAdmin {
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId String @unique @db.Uuid
+  churchId  String @db.Uuid
+  
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  church  Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@map("church_admins")
+}
+
+model Counselor {
+  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId       String @unique @db.Uuid
+  churchId        String @db.Uuid
+  
+  bio             String?
+  yearsExperience Int?
+  
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  church  Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+
+  @@map("counselors")
+}
+
+model User {
+  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId String     @unique @db.Uuid
   gender    GenderType
 
+  // Nigerian Location
   originCountry String?
   originState   String?
   originLga     String?
-
+  
   residenceCountry String?
   residenceState   String?
   residenceCity    String?
   residenceAddress String?
 
+  // Dating Profile
   occupation      String?
   interests       Json?
   church          String?
   matchPreference MatchPreferenceType?
 
+  // Subscription
   subscriptionTier      SubscriptionTierType   @default(free)
   subscriptionStatus    SubscriptionStatusType @default(active)
   subscriptionExpiresAt DateTime?
 
-  isVerified Boolean  @default(false)
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  // Verification
+  isVerified Boolean @default(false)
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
   @@map("users")
+}
+
+// ============= CHURCH MODEL =============
+
+model Church {
+  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  officialName String
+  aka          String?
+  email        String     @unique
+  phone        String
+  
+  // Nigerian Address
+  state   String
+  lga     String?
+  city    String?
+  address String?
+  
+  status StatusType @default(pending)
+  
+  createdBy String     @db.Uuid
+  creator   SuperAdmin @relation(fields: [createdBy], references: [id])
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  churchAdmins ChurchAdmin[]
+  counselors   Counselor[]
+  invites      Invite[]
+
+  @@map("churches")
+}
+
+// ============= INVITE SYSTEM =============
+// Generic invite system - used for both ChurchAdmin and Counselor invites
+
+model Invite {
+  id    String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token String     @unique
+  type  InviteType
+  email String
+  
+  // Church context (required for ChurchAdmin and Counselor)
+  churchId String? @db.Uuid
+  church   Church? @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  
+  // Who created this invite
+  createdByAccountId String  @db.Uuid
+  createdBy          Account @relation("CreatedBy", fields: [createdByAccountId], references: [id])
+  
+  // Status
+  used      Boolean   @default(false)
+  usedAt    DateTime?
+  expiresAt DateTime
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("invites")
 }
