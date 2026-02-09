@@ -7,6 +7,7 @@ import ResidenceStep from './ResidenceStep';
 import OccupationStep from './OccupationStep';
 import InterestsStep from './InterestsStep';
 import ChurchStep from './ChurchStep';
+import { useSignupMutation } from '../../../api/queries/auth';
 
 const SignupForm = () => {
     const [step, setStep] = useState(1);
@@ -101,41 +102,32 @@ const SignupForm = () => {
         if (step > 1) setStep(step - 1);
     };
 
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const signupMutation = useSignupMutation();
+    const isSubmitting = signupMutation.isPending;
 
     const handleSubmit = async () => {
-        setIsSubmitting(true);
         setErrors({});
 
         try {
-            const response = await fetch('http://localhost:5000/api/auth/signup', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData),
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                // If the backend returned specific validation/logic errors
-                if (data.message === 'User already exists') {
-                    setErrors({ email: 'This email is already registered.' });
-                    setStep(1); // Jump back to where email is
-                } else {
-                    alert(data.message || 'Something went wrong during signup.');
-                }
-                return;
-            }
+            const data = await signupMutation.mutateAsync(formData);
 
             console.log('Signup Successful:', data);
             navigate('/email-confirmation');
         } catch (error) {
-            console.error('Network error:', error);
-            alert('Could not connect to the server. Please check if the backend is running.');
+            const message =
+                error?.response?.data?.message ||
+                error?.message ||
+                'Something went wrong during signup.';
+
+            if (message === 'User already exists') {
+                setErrors({ email: 'This email is already registered.' });
+                setStep(1); // Jump back to where email is
+            } else {
+                alert(message);
+            }
+            console.error('Signup error:', error);
         } finally {
-            setIsSubmitting(false);
+            // React Query manages loading state
         }
     };
 

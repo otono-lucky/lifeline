@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Input from '../../../components/Input';
+import { useLoginMutation } from '../../../api/queries/auth';
+import { setToken } from '../../../lib/auth';
 
 const LoginForm = () => {
     const [formData, setFormData] = useState({
@@ -22,7 +24,8 @@ const LoginForm = () => {
         }
     };
 
-    const [isSubmitting, setIsSubmitting] = useState(false);
+    const loginMutation = useLoginMutation();
+    const isSubmitting = loginMutation.isPending;
 
     const validate = () => {
         const newErrors = {};
@@ -39,32 +42,28 @@ const LoginForm = () => {
         e.preventDefault();
         if (!validate()) return;
 
-        setIsSubmitting(true);
         try {
-            const response = await fetch('http://localhost:5000/api/auth/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(formData),
+            const data = await loginMutation.mutateAsync({
+                email: formData.email,
+                password: formData.password,
+                rememberMe: formData.rememberMe,
             });
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                setErrors({ auth: data.message || 'Invalid credentials' });
-                return;
-            }
-
             console.log('Login Successful:', data);
-            localStorage.setItem('token', data.token);
+            if (data?.token) {
+                setToken(data.token);
+            }
             alert('Login successful! Welcome to Lifeline.');
             // Route to dashboard here in the future
         } catch (error) {
+            const message =
+                error?.response?.data?.message ||
+                error?.message ||
+                'Invalid credentials';
+            setErrors({ auth: message });
             console.error('Login error:', error);
-            alert('Could not connect to the server.');
         } finally {
-            setIsSubmitting(false);
+            // React Query manages loading state
         }
     };
 
