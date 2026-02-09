@@ -2,19 +2,21 @@
 // Main router - combines all resource routes
 
 import express from "express";
+import authRoutes from "./authRoutes";
 import churchRoutes from "./churchRoutes";
-import accountRoutes from "./accountRoutes";
+import churchAdminRoutes from "./churchAdminRoutes";
 import counselorRoutes from "./counsellorRoutes";
 import userRoutes from "./userRoutes";
-import dashboardRoutes from "./adminRoutes";
+import adminRoutes from "./adminRoutes";
 
 const router = express.Router();
 
 // Mount resource routers
+router.use("/auth", authRoutes);
 router.use("/churches", churchRoutes);
-router.use("/accounts", accountRoutes);
-router.use("/counselors", counselorRoutes);
+router.use("/church-admin", churchAdminRoutes);
+router.use("/counselor", counselorRoutes);
 router.use("/users", userRoutes);
-router.use("/dashboard", dashboardRoutes);
+router.use("/admin", adminRoutes);
 
 export default router;

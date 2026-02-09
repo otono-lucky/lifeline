@@ -10,6 +10,7 @@ import {
 } from "../services/userService";
 import { updateAccountStatus } from "../services/accountService";
 import { prisma } from "../config/db";
+import { successResponse, errorResponse } from "../utils/responseHandler";
 
 /**
  * @desc    Get all users
@@ -27,12 +28,18 @@ export const list = async (req: Request, res: Response) => {
       limit: limit ? parseInt(limit as string) : undefined,
     });
 
-    res.json(result);
+    res.json(
+      successResponse(
+        "Users fetched successfully",
+        { users: result.users },
+        result.pagination
+      )
+    );
   } catch (error: any) {
     console.error("List users error:", error);
-    res.status(500).json({
-      message: error.message || "Server error fetching users",
-    });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching users"));
   }
 };
 
@@ -52,25 +59,25 @@ export const getOne = async (req: Request, res: Response) => {
       });
 
       if (!userProfile || userProfile.id !== id) {
-        return res.status(403).json({
-          message: "You can only view your own profile",
-        });
+        return res
+          .status(403)
+          .json(errorResponse("You can only view your own profile"));
       }
     }
 
     const user = await getUserById(id);
 
-    res.json({ user });
+    res.json(successResponse("User fetched successfully", { user }));
   } catch (error: any) {
     console.error("Get user error:", error);
 
     if (error.message === "User not found") {
-      return res.status(404).json({ message: error.message });
+      return res.status(404).json(errorResponse(error.message));
     }
 
-    res.status(500).json({
-      message: error.message || "Server error fetching user",
-    });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching user"));
   }
 };
 
@@ -92,7 +99,7 @@ export const update = async (req: Request, res: Response) => {
       residenceAddress,
       occupation,
       interests,
-      church,
+      church: churchId,
       matchPreference,
     } = req.body;
 
@@ -103,9 +110,9 @@ export const update = async (req: Request, res: Response) => {
       });
 
       if (!userProfile || userProfile.id !== id) {
-        return res.status(403).json({
-          message: "You can only update your own profile",
-        });
+        return res
+          .status(403)
+          .json(errorResponse("You can only update your own profile"));
       }
     }
 
@@ -119,19 +126,16 @@ export const update = async (req: Request, res: Response) => {
       residenceAddress,
       occupation,
       interests,
-      church,
+      churchId,
       matchPreference,
     });
 
-    res.json({
-      message: "User profile updated successfully",
-      user,
-    });
+    res.json(successResponse("User profile updated successfully", { user }));
   } catch (error: any) {
     console.error("Update user error:", error);
-    res.status(500).json({
-      message: error.message || "Server error updating user",
-    });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error updating user"));
   }
 };
 
@@ -146,22 +150,26 @@ export const updateVerification = async (req: Request, res: Response) => {
     const { isVerified } = req.body;
 
     if (typeof isVerified !== "boolean") {
-      return res.status(400).json({
-        message: "isVerified must be a boolean",
-      });
+      return res
+        .status(400)
+        .json(errorResponse("isVerified must be a boolean"));
     }
 
     const user = await updateUserVerification(id, isVerified);
 
-    res.json({
-      message: `User ${isVerified ? "verified" : "unverified"} successfully`,
-      user,
-    });
+    res.json(
+      successResponse(
+        `User ${isVerified ? "verified" : "unverified"} successfully`,
+        { user }
+      )
+    );
   } catch (error: any) {
     console.error("Update user verification error:", error);
-    res.status(500).json({
-      message: error.message || "Server error updating verification",
-    });
+    res
+      .status(500)
+      .json(
+        errorResponse(error.message || "Server error updating verification")
+      );
   }
 };
 
@@ -176,9 +184,9 @@ export const updateStatus = async (req: Request, res: Response) => {
     const { status } = req.body;
 
     if (!["active", "suspended"].includes(status)) {
-      return res.status(400).json({
-        message: "Invalid status. Must be: active or suspended",
-      });
+      return res
+        .status(400)
+        .json(errorResponse("Invalid status. Must be: active or suspended"));
     }
 
     // Get user to find their accountId
@@ -188,22 +196,22 @@ export const updateStatus = async (req: Request, res: Response) => {
     });
 
     if (!user) {
-      return res.status(404).json({
-        message: "User not found",
-      });
+      return res.status(404).json(errorResponse("User not found"));
     }
 
     // Update account status
     const account = await updateAccountStatus(user.accountId, status);
 
-    res.json({
-      message: `User ${status === "active" ? "activated" : "suspended"} successfully`,
-      status: account.status,
-    });
+    res.json(
+      successResponse(
+        `User ${status === "active" ? "activated" : "suspended"} successfully`,
+        { status: account.status }
+      )
+    );
   } catch (error: any) {
     console.error("Update user status error:", error);
-    res.status(500).json({
-      message: error.message || "Server error updating user status",
-    });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error updating user status"));
   }
 };

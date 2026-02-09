@@ -6,6 +6,7 @@ import {
   getSuperAdminDashboard,
   getPlatformStats,
 } from "../services/adminService";
+import { successResponse, errorResponse } from "../utils/responseHandler";
 
 /**
  * @desc    Get SuperAdmin dashboard
@@ -16,18 +17,18 @@ export const getDashboard = async (req: Request, res: Response) => {
   try {
     const dashboard = await getSuperAdminDashboard();
 
-    res.json(dashboard);
+    res.json(successResponse("Dashboard data fetched successfully", dashboard));
   } catch (error: any) {
     console.error("Get dashboard error:", error);
-    res.status(500).json({
-      message: error.message || "Server error fetching dashboard",
-    });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching dashboard"));
   }
 };
 
 /**
  * @desc    Get platform statistics
- * @route   GET /api/dashboard/stats
+ * @route   GET /api/admin/stats
  * @access  SuperAdmin
  */
 export const getStats = async (req: Request, res: Response) => {
@@ -41,11 +42,13 @@ export const getStats = async (req: Request, res: Response) => {
 
     const stats = await getPlatformStats(selectedPeriod);
 
-    res.json(stats);
+    res.json(successResponse("Platform statistics fetched successfully", stats));
   } catch (error: any) {
     console.error("Get platform stats error:", error);
-    res.status(500).json({
-      message: error.message || "Server error fetching statistics",
-    });
+    res
+      .status(500)
+      .json(
+        errorResponse(error.message || "Server error fetching statistics")
+      );
   }
 };

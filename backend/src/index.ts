@@ -1,6 +1,6 @@
 import express from "express";
 import cors from "cors";
-import authRoutes from "./routes/authRoutes";
+import routes from "./routes";
 import env from "./config/env";
 
 const app = express();
@@ -11,10 +11,10 @@ app.use(cors());
 app.use(express.json());
 
 // Routes
-app.use("/api/auth", authRoutes);
+app.use("/api", routes);
 
 // Basic Route
-app.get("/", (req, res) => {
+app.get("/", (_, res) => {
   res.json({ message: "Welcome to Lifeline API - Where Faith meets Logic." });
 });
 

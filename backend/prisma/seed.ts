@@ -5,7 +5,7 @@ import { prisma } from "../src/config/db.js";
 async function main() {
   const passwordHash = await bcrypt.hash("Password123!", 10);
 
-  await prisma.account.upsert({
+  const adminAccount = await prisma.account.upsert({
     where: { email: "admin@lifeline.test" },
     update: {},
     create: {
@@ -14,9 +14,17 @@ async function main() {
       email: "admin@lifeline.test",
       phone: "0000000000",
       password: passwordHash,
-      role: "ChurchAdmin"
+      role: "SuperAdmin",
     },
   });
+
+  await prisma.superAdmin.upsert({
+    where: { accountId: adminAccount.id },
+    update: {},
+    create: {
+      accountId: adminAccount.id
+    }
+  })
 
   console.log("Seed completed");
 }

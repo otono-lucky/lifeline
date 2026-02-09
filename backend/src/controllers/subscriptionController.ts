@@ -2,6 +2,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { prisma } from "../config/db";
 import env from "../config/env";
+import { successResponse, errorResponse } from "../utils/responseHandler";
 
 // @desc    Update user subscription tier
 // @route   PUT /api/auth/subscription
@@ -12,7 +13,7 @@ export const updateSubscription = async (req, res) => {
     const userAccountId = req.account.id; // From authMiddleware
 
     if (!["free", "premium"].includes(tier)) {
-      return res.status(400).json({ message: "Invalid subscription tier" });
+      return res.status(400).json(errorResponse("Invalid subscription tier"));
     }
 
     const updatedUser = await prisma.user.update({
@@ -21,14 +22,13 @@ export const updateSubscription = async (req, res) => {
       select: { id: true, subscriptionTier: true },
     });
 
-    res.json({
-      message: `Subscription updated to ${tier}`,
-      user: updatedUser,
-    });
+    res.json(
+      successResponse(`Subscription updated to ${tier}`, { user: updatedUser })
+    );
   } catch (error) {
     console.error("Subscription update error:", error);
     res
       .status(500)
-      .json({ message: "Server error during subscription update" });
+      .json(errorResponse("Server error during subscription update"));
   }
 };

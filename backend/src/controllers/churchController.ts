@@ -7,8 +7,11 @@ import {
   getChurches,
   getChurchById,
   updateChurch,
+  getChurchMembers,
 } from "../services/churchService";
 import { prisma } from "../config/db";
+import { errorResponse, successResponse } from "../utils/responseHandler";
+import { Params } from "../types/express";
 
 /**
  * @desc    Create a new church
@@ -22,9 +25,13 @@ export const create = async (req: Request, res: Response) => {
 
     // Validation
     if (!officialName || !email || !phone || !state) {
-      return res.status(400).json({
-        message: "Missing required fields: officialName, email, phone, state",
-      });
+      return res
+        .status(400)
+        .json(
+          errorResponse(
+            "Missing required fields: officialName, email, phone, state"
+          )
+        );
     }
 
     // Get SuperAdmin
@@ -33,9 +40,7 @@ export const create = async (req: Request, res: Response) => {
     });
 
     if (!superAdmin) {
-      return res.status(403).json({
-        message: "SuperAdmin profile not found",
-      });
+      return res.status(403).json(errorResponse("SuperAdmin profile not found"));
     }
 
     const church = await createChurch({
@@ -50,15 +55,14 @@ export const create = async (req: Request, res: Response) => {
       createdBy: superAdmin.id,
     });
 
-    res.status(201).json({
-      message: "Church created successfully",
-      church,
-    });
+    res
+      .status(201)
+      .json(successResponse("Church created successfully", { church }));
   } catch (error: any) {
     console.error("Create church error:", error);
-    res.status(500).json({
-      message: error.message || "Server error creating church",
-    });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error creating church"));
   }
 };
 
@@ -77,12 +81,18 @@ export const list = async (req: Request, res: Response) => {
       limit: limit ? parseInt(limit as string) : undefined,
     });
 
-    res.json(result);
+    res.json(
+      successResponse(
+        "Churches fetched successfully",
+        { churches: result.churches },
+        result.pagination
+      )
+    );
   } catch (error: any) {
     console.error("List churches error:", error);
-    res.status(500).json({
-      message: error.message || "Server error fetching churches",
-    });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching churches"));
   }
 };
 
@@ -97,17 +107,44 @@ export const getOne = async (req: Request, res: Response) => {
 
     const church = await getChurchById(id);
 
-    res.json({ church });
+    res.json(successResponse("Church fetched successfully", { church }));
   } catch (error: any) {
     console.error("Get church error:", error);
 
     if (error.message === "Church not found") {
-      return res.status(404).json({ message: error.message });
+      return res.status(404).json(errorResponse(error.message));
     }
 
-    res.status(500).json({
-      message: error.message || "Server error fetching church",
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching church"));
+  }
+};
+
+export const getMembers = async (req: Request<Params>, res: Response) => {
+  try {
+    const { verificationStatus, page, limit } = req.query;
+    const {id} = req.params
+
+    const result = await getChurchMembers(req.account.id, {
+      churchId: id,
+      verificationStatus: verificationStatus as string,
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
     });
+
+    res.json(
+      successResponse(
+        "Members fetched successfully",
+        { members: result.members },
+        result.pagination
+      )
+    );
+  } catch (error: any) {
+    console.error("Get members error:", error);
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching members"));
   }
 };
 
@@ -131,14 +168,11 @@ export const update = async (req: Request, res: Response) => {
       address,
     });
 
-    res.json({
-      message: "Church updated successfully",
-      church,
-    });
+    res.json(successResponse("Church updated successfully", { church }));
   } catch (error: any) {
     console.error("Update church error:", error);
-    res.status(500).json({
-      message: error.message || "Server error updating church",
-    });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error updating church"));
   }
 };

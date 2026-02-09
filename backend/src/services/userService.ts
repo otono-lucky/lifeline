@@ -1,14 +1,16 @@
-// services/user.service.ts
-// User resource management
+// services/userService.ts
+// User business logic
 
 import { MatchPreferenceType } from "@prisma/client";
 import { prisma } from "../config/db";
 
 /**
- * Get all users (dating app users)
+ * Get all users (with filters)
  */
 export const getUsers = async (filters?: {
+  churchId?: string;
   isVerified?: boolean;
+  verificationStatus?: string;
   subscriptionTier?: string;
   page?: number;
   limit?: number;
@@ -19,8 +21,16 @@ export const getUsers = async (filters?: {
 
   const where: any = {};
   
+  if (filters?.churchId) {
+    where.churchId = filters.churchId;
+  }
+  
   if (filters?.isVerified !== undefined) {
     where.isVerified = filters.isVerified;
+  }
+  
+  if (filters?.verificationStatus) {
+    where.verificationStatus = filters.verificationStatus;
   }
   
   if (filters?.subscriptionTier) {
@@ -43,6 +53,24 @@ export const getUsers = async (filters?: {
             phone: true,
             status: true,
             createdAt: true,
+          },
+        },
+        church: {
+          select: {
+            id: true,
+            officialName: true,
+            aka: true,
+          },
+        },
+        assignedCounselor: {
+          select: {
+            id: true,
+            account: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
           },
         },
       },
@@ -79,6 +107,25 @@ export const getUserById = async (userId: string) => {
           createdAt: true,
         },
       },
+      church: {
+        select: {
+          id: true,
+          officialName: true,
+          aka: true,
+        },
+      },
+      assignedCounselor: {
+        select: {
+          id: true,
+          account: {
+            select: {
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -104,7 +151,7 @@ export const updateUser = async (
     residenceAddress?: string;
     occupation?: string;
     interests?: any;
-    church?: string;
+    churchId?: string;
     matchPreference?: MatchPreferenceType;
   }
 ) => {
@@ -117,7 +164,7 @@ export const updateUser = async (
 };
 
 /**
- * Update user verification status
+ * Update user verification status (for counselors/admins)
  */
 export const updateUserVerification = async (
   userId: string,
@@ -125,7 +172,11 @@ export const updateUserVerification = async (
 ) => {
   const user = await prisma.user.update({
     where: { id: userId },
-    data: { isVerified },
+    data: { 
+      isVerified,
+      verificationStatus: isVerified ? "verified" : "pending",
+      verifiedAt: isVerified ? new Date() : null,
+    },
   });
 
   return user;

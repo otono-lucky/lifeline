@@ -51,26 +51,33 @@ enum StatusType {
   suspended
 }
 
+enum VerificationStatus {
+  pending
+  in_progress
+  verified
+  rejected
+}
+
 // ============= AUTH TABLE =============
 
 model Account {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email     String   @unique
+  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email     String  @unique
   password  String
   firstName String
   lastName  String
   phone     String?
   role      Role
 
-   // Email verification
-  isEmailVerified       Boolean   @default(false)
-  emailVerificationToken String?  @unique
+  // Email verification
+  isEmailVerified         Boolean   @default(false)
+  emailVerificationToken  String?   @unique
   emailVerificationExpiry DateTime?
-  
+
   // Password reset
   passwordResetToken  String?   @unique
   passwordResetExpiry DateTime?
-  
+
   status    StatusType @default(active)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
@@ -80,7 +87,7 @@ model Account {
   churchAdmin ChurchAdmin?
   counselor   Counselor?
   user        User?
-  
+
   // Invites created by this account (if admin)
   invitesCreated Invite[] @relation("CreatedBy")
 
@@ -90,11 +97,11 @@ model Account {
 // ============= ROLE TABLES =============
 
 model SuperAdmin {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId String  @unique @db.Uuid
-  
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId String @unique @db.Uuid
+
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  
+
   churchesCreated Church[]
 
   @@map("super_admins")
@@ -104,24 +111,27 @@ model ChurchAdmin {
   id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   accountId String @unique @db.Uuid
   churchId  String @db.Uuid
-  
+
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   church  Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
 
+  @@index([churchId])
   @@map("church_admins")
 }
 
 model Counselor {
-  id              String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId       String @unique @db.Uuid
-  churchId        String @db.Uuid
-  
+  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId String @unique @db.Uuid
+  churchId  String @db.Uuid
+
   bio             String?
   yearsExperience Int?
-  
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  church  Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
 
+  account       Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  church        Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  assignedUsers User[]  @relation("AssignedUsers")
+
+  @@index([churchId])
   @@map("counselors")
 }
 
@@ -134,7 +144,7 @@ model User {
   originCountry String?
   originState   String?
   originLga     String?
-  
+
   residenceCountry String?
   residenceState   String?
   residenceCity    String?
@@ -143,7 +153,6 @@ model User {
   // Dating Profile
   occupation      String?
   interests       Json?
-  church          String?
   matchPreference MatchPreferenceType?
 
   // Subscription
@@ -152,39 +161,50 @@ model User {
   subscriptionExpiresAt DateTime?
 
   // Verification
-  isVerified Boolean @default(false)
+  isVerified         Boolean   @default(false)
+  verificationStatus String    @default("pending") // pending, in_progress, verified, rejected
+  verificationNotes  String? // Counselor's notes
+  verifiedAt         DateTime?
+
+  assignedCounselorId String?    @db.Uuid
+  assignedCounselor   Counselor? @relation("AssignedUsers", fields: [assignedCounselorId], references: [id])
+
+  churchId String? @db.Uuid
+  church   Church? @relation("ChurchMembers", fields: [churchId], references: [id])
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
 
+  @@index([churchId])
   @@map("users")
 }
 
 // ============= CHURCH MODEL =============
 
 model Church {
-  id           String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   officialName String
   aka          String?
-  email        String     @unique
+  email        String  @unique
   phone        String
-  
+
   // Nigerian Address
   state   String
   lga     String?
   city    String?
   address String?
-  
+
   status StatusType @default(pending)
-  
+
   createdBy String     @db.Uuid
   creator   SuperAdmin @relation(fields: [createdBy], references: [id])
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   // Relations
   churchAdmins ChurchAdmin[]
   counselors   Counselor[]
+  members      User[]        @relation("ChurchMembers")
   invites      Invite[]
 
   @@map("churches")
@@ -198,20 +218,20 @@ model Invite {
   token String     @unique
   type  InviteType
   email String
-  
+
   // Church context (required for ChurchAdmin and Counselor)
   churchId String? @db.Uuid
   church   Church? @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  
+
   // Who created this invite
   createdByAccountId String  @db.Uuid
   createdBy          Account @relation("CreatedBy", fields: [createdByAccountId], references: [id])
-  
+
   // Status
   used      Boolean   @default(false)
   usedAt    DateTime?
   expiresAt DateTime
-  
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

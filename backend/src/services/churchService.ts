@@ -157,6 +157,109 @@ export const getChurchById = async (churchId: string) => {
 };
 
 /**
+ * Get all members of a church
+ */
+export const getChurchMembers = async (
+  requesterId: string,
+  options?: {
+    churchId?: string,
+    verificationStatus?: string;
+    page?: number;
+    limit?: number;
+  },
+) => {
+  // Get admin
+  const { churchId, verificationStatus, page = 1, limit = 20 } = options;
+  const skip = (page - 1) * limit;
+
+  const requester = await prisma.account.findUnique({
+    where: { id: requesterId },
+    include: { churchAdmin: true, superAdmin: true },
+  });
+
+  if (!requester) throw new Error("Requester not found");
+
+  // Determine which churchId to use
+  let targetChurchId: string;
+  if (requester.churchAdmin) {
+    targetChurchId = requester.churchAdmin.churchId;
+    if (churchId && churchId !== targetChurchId) {
+      throw new Error("Church admin can only view their own church members");
+    }
+  } else if (requester.superAdmin) {
+    if (!churchId) throw new Error("SuperAdmin must provide churchId");
+    targetChurchId = churchId;
+  } else {
+    throw new Error("Unauthorized role for viewing members");
+  }
+
+  const where: any = { churchId: options.churchId };
+  if (options?.verificationStatus) {
+    where.verificationStatus = options.verificationStatus;
+  }
+
+  const [members, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: { account: { createdAt: "desc" } },
+      include: {
+        account: {
+          select: {
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            status: true,
+            createdAt: true,
+          },
+        },
+        assignedCounselor: {
+          select: {
+            id: true,
+            account: {
+              select: {
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+    }),
+    prisma.user.count({ where }),
+  ]);
+
+  return {
+    members: members.map((m) => ({
+      id: m.id,
+      firstName: m.account.firstName,
+      lastName: m.account.lastName,
+      email: m.account.email,
+      phone: m.account.phone,
+      verificationStatus: m.verificationStatus,
+      verificationNotes: m.verificationNotes,
+      verifiedAt: m.verifiedAt,
+      assignedCounselor: m.assignedCounselor
+        ? {
+            id: m.assignedCounselor.id,
+            name: `${m.assignedCounselor.account.firstName} ${m.assignedCounselor.account.lastName}`,
+          }
+        : null,
+      accountStatus: m.account.status,
+      joinedAt: m.account.createdAt,
+    })),
+    pagination: {
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    },
+  };
+};
+
+/**
  * Update church details
  */
 export const updateChurch = async (

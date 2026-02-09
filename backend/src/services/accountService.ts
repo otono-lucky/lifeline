@@ -73,12 +73,14 @@ export const createChurchAdmin = async (data: CreateChurchAdminData) => {
   }
 
   // Check if church already has an admin
-  const existingAdmin = await prisma.churchAdmin.findFirst({
+  const existingAdminCount = await prisma.churchAdmin.count({
     where: { churchId: data.churchId },
   });
 
-  if (existingAdmin) {
-    throw new Error("Church already has an admin");
+  if (existingAdminCount >= 3) {
+    throw new Error(
+      "Church already has a maximum of 3 admin allowed for each church",
+    );
   }
 
   // Create account + church admin profile in transaction
@@ -98,7 +100,9 @@ export const createChurchAdmin = async (data: CreateChurchAdminData) => {
   });
 
   // Activate church
-  await activateChurch(data.churchId);
+  if (existingAdminCount === 0) {
+    await activateChurch(data.churchId);
+  }
 
   return result;
 };
@@ -163,7 +167,7 @@ export const getAccountByEmail = async (email: string) => {
  */
 export const updateAccountStatus = async (
   accountId: string,
-  status: "active" | "suspended"
+  status: "active" | "suspended",
 ) => {
   const account = await prisma.account.update({
     where: { id: accountId },

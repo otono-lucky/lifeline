@@ -12,6 +12,7 @@ import {
   resetPassword,
   resendVerificationEmail,
 } from "../services/authService";
+import { successResponse, errorResponse } from "../utils/responseHandler";
 
 /**
  * @desc    Register new user (existing - update to send verification email)
@@ -46,7 +47,7 @@ export const signup = async (req: Request, res: Response) => {
     });
 
     if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
+      return res.status(400).json(errorResponse("User already exists"));
     }
 
     // Hash password
@@ -96,15 +97,20 @@ export const signup = async (req: Request, res: Response) => {
     // Generate token (user can login but features limited until verified)
     const token = generateToken(newAccount);
 
-    res.status(201).json({
-      message:
+    res.status(201).json(
+      successResponse(
         "User registered successfully. Please check your email to verify your account.",
-      token,
-      user: newAccount,
-    });
+        {
+          token,
+          user: newAccount,
+        }
+      )
+    );
   } catch (error: any) {
     console.error("Signup error:", error);
-    res.status(500).json({ message: "Server error during registration" });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error during registration"));
   }
 };
 
@@ -123,30 +129,37 @@ export const login = async (req: Request, res: Response) => {
     });
 
     if (!userAccount) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json(errorResponse("Invalid credentials"));
     }
 
     // Check password
     const isMatch = await bcrypt.compare(password, userAccount.password);
     if (!isMatch) {
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json(errorResponse("Invalid credentials"));
     }
 
     // Check if account is suspended
     if (userAccount.status === "suspended") {
-      return res.status(403).json({
-        message: "Your account has been suspended. Please contact support.",
-      });
+      return res
+        .status(403)
+        .json(
+          errorResponse(
+            "Your account has been suspended. Please contact support."
+          )
+        );
     }
 
     // Check email verification (only for regular users)
     if (userAccount.role === "User" && !userAccount.isEmailVerified) {
-      return res.status(403).json({
-        message:
+      return res.status(403).json(
+        errorResponse(
           "Please verify your email address before logging in. Check your inbox for the verification link.",
-        requiresVerification: true,
-        email: userAccount.email,
-      });
+          {
+            requiresVerification: true,
+            email: userAccount.email,
+          }
+        )
+      );
     }
 
     // Generate token
@@ -157,21 +170,24 @@ export const login = async (req: Request, res: Response) => {
       firstName: userAccount.firstName,
     });
 
-    res.json({
-      message: "Logged in successfully",
-      token,
-      user: {
-        id: userAccount.id,
-        firstName: userAccount.firstName,
-        lastName: userAccount.lastName,
-        email: userAccount.email,
-        role: userAccount.role,
-        isEmailVerified: userAccount.isEmailVerified,
-      },
-    });
+    res.json(
+      successResponse("Logged in successfully", {
+        token,
+        user: {
+          id: userAccount.id,
+          firstName: userAccount.firstName,
+          lastName: userAccount.lastName,
+          email: userAccount.email,
+          role: userAccount.role,
+          isEmailVerified: userAccount.isEmailVerified,
+        },
+      })
+    );
   } catch (error: any) {
     console.error("Login error:", error);
-    res.status(500).json({ message: "Server error during login" });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error during login"));
   }
 };
 
@@ -185,19 +201,23 @@ export const requestVerification = async (req: Request, res: Response) => {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json(errorResponse("Email is required"));
     }
 
     await resendVerificationEmail(email);
 
-    res.json({
-      message: "Verification email sent. Please check your inbox.",
-    });
+    res.json(
+      successResponse("Verification email sent. Please check your inbox.", null)
+    );
   } catch (error: any) {
     console.error("Request verification error:", error);
-    res.status(500).json({
-      message: error.message || "Server error sending verification email",
-    });
+    res
+      .status(500)
+      .json(
+        errorResponse(
+          error.message || "Server error sending verification email"
+        )
+      );
   }
 };
 
@@ -212,12 +232,14 @@ export const verifyEmailToken = async (req: Request, res: Response) => {
 
     const result = await verifyEmail(token);
 
-    res.json(result);
+    res.json(successResponse(result.message, { account: result.account }));
   } catch (error: any) {
     console.error("Verify email error:", error);
-    res.status(400).json({
-      message: error.message || "Server error verifying email",
-    });
+    res
+      .status(400)
+      .json(
+        errorResponse(error.message || "Server error verifying email")
+      );
   }
 };
 
@@ -231,17 +253,21 @@ export const forgotPassword = async (req: Request, res: Response) => {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json(errorResponse("Email is required"));
     }
 
     const result = await requestPasswordReset(email);
 
-    res.json(result);
+    res.json(successResponse(result.message, null));
   } catch (error: any) {
     console.error("Forgot password error:", error);
-    res.status(500).json({
-      message: "Server error processing password reset request",
-    });
+    res
+      .status(500)
+      .json(
+        errorResponse(
+          error.message || "Server error processing password reset request"
+        )
+      );
   }
 };
 
@@ -256,31 +282,31 @@ export const resetPasswordWithToken = async (req: Request, res: Response) => {
 
     // Validation
     if (!token || !password || !confirmPassword) {
-      return res.status(400).json({
-        message: "Token, password, and confirmPassword are required",
-      });
+      return res
+        .status(400)
+        .json(
+          errorResponse("Token, password, and confirmPassword are required")
+        );
     }
 
     if (password !== confirmPassword) {
-      return res.status(400).json({
-        message: "Passwords do not match",
-      });
+      return res.status(400).json(errorResponse("Passwords do not match"));
     }
 
     if (password.length < 6) {
-      return res.status(400).json({
-        message: "Password must be at least 6 characters long",
-      });
+      return res
+        .status(400)
+        .json(errorResponse("Password must be at least 6 characters long"));
     }
 
     const result = await resetPassword(token, password);
 
-    res.json(result);
+    res.json(successResponse(result.message, null));
   } catch (error: any) {
     console.error("Reset password error:", error);
-    res.status(400).json({
-      message: error.message || "Server error resetting password",
-    });
+    res
+      .status(400)
+      .json(errorResponse(error.message || "Server error resetting password"));
   }
 };
 
@@ -307,12 +333,14 @@ export const getCurrentUser = async (req: Request, res: Response) => {
     });
 
     if (!account) {
-      return res.status(404).json({ message: "Account not found" });
+      return res.status(404).json(errorResponse("Account not found"));
     }
 
-    res.json({ user: account });
+    res.json(successResponse("User fetched successfully", { user: account }));
   } catch (error: any) {
     console.error("Get current user error:", error);
-    res.status(500).json({ message: "Server error fetching user" });
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching user"));
   }
 };

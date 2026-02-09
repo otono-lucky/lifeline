@@ -1,28 +1,57 @@
-// routes/counselor.routes.ts
-// Counselor resource routes
+// routes/counselorRoutes.ts
+// Counselor routes
 
 import express from "express";
-import * as CounselorController from "../controllers/counsellorController";
+import {
+  getDashboard,
+  getMyAssignedUsers,
+  verifyUserStatus,
+  createCounselorAccount,
+  list,
+  getOne,
+  update,
+  updateStatus,
+} from "../controllers/counsellorController";
 import authMiddleware from "../middleware/authMiddleware";
-import { requireAnyAdmin } from "../middleware/requireRole";
+import {
+  requireCounselor,
+  requireAnyAdmin,
+} from "../middleware/requireRole";
 
 const router = express.Router();
 
-// List counselors
-router.get("/", authMiddleware, requireAnyAdmin, CounselorController.list);
+// Counselor dashboard
+router.get("/dashboard", authMiddleware, requireCounselor, getDashboard);
 
-// Get single counselor
-router.get("/:id", authMiddleware, requireAnyAdmin, CounselorController.getOne);
-
-// Update counselor
-router.put("/:id", authMiddleware, requireAnyAdmin, CounselorController.update);
-
-// Update counselor status
-router.patch(
-  "/:id/status",
+// Get assigned users
+router.get(
+  "/assigned-users",
   authMiddleware,
-  requireAnyAdmin,
-  CounselorController.updateStatus
+  requireCounselor,
+  getMyAssignedUsers
 );
+
+// Verify user
+router.post(
+  "/verify-user/:userId",
+  authMiddleware,
+  requireCounselor,
+  verifyUserStatus
+);
+
+// Create counselor (Admins)
+router.post("/create", authMiddleware, requireAnyAdmin, createCounselorAccount);
+
+// List counselors (Admins)
+router.get("/list", authMiddleware, requireAnyAdmin, list);
+
+// Get single counselor (Admins)
+router.get("/:id", authMiddleware, requireAnyAdmin, getOne);
+
+// Update counselor (Admins)
+router.put("/:id", authMiddleware, requireAnyAdmin, update);
+
+// Update status (Admins)
+router.patch("/:id/status", authMiddleware, requireAnyAdmin, updateStatus);
 
 export default router;

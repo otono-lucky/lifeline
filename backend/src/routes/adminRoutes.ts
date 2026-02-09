@@ -1,17 +1,17 @@
-// routes/dashboard.routes.ts
-// SuperAdmin dashboard routes
+// routes/churchAdminRoutes.ts
+// ChurchAdmin routes
 
 import express from "express";
-import * as DashboardController from "../controllers/adminController";
+import { getDashboard, getStats } from "../controllers/adminController";
 import authMiddleware from "../middleware/authMiddleware";
 import { requireSuperAdmin } from "../middleware/requireRole";
 
 const router = express.Router();
 
-// Get dashboard overview
-router.get("/", authMiddleware, requireSuperAdmin, DashboardController.getDashboard);
+// Dashboard
+router.get("/dashboard", authMiddleware, requireSuperAdmin, getDashboard);
 
-// Get platform statistics
-router.get("/stats", authMiddleware, requireSuperAdmin, DashboardController.getStats);
+// Members
+router.get("/stats", authMiddleware, requireSuperAdmin, getStats);
 
 export default router;
