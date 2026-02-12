@@ -11,11 +11,13 @@ import {
   getOne,
   update,
   updateStatus,
+  getAllCounselors,
 } from "../controllers/counsellorController";
 import authMiddleware from "../middleware/authMiddleware";
 import {
   requireCounselor,
   requireAnyAdmin,
+  requireSuperAdmin,
 } from "../middleware/requireRole";
 
 const router = express.Router();
@@ -43,6 +45,7 @@ router.post(
 router.post("/create", authMiddleware, requireAnyAdmin, createCounselorAccount);
 
 // List counselors (Admins)
+router.get("/list-all", authMiddleware, requireSuperAdmin, getAllCounselors);
 router.get("/list", authMiddleware, requireAnyAdmin, list);
 
 // Get single counselor (Admins)

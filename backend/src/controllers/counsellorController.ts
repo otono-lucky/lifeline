@@ -9,6 +9,7 @@ import {
   getCounselorsByChurch,
   getCounselorById,
   updateCounselor,
+  getCounselors,
 } from "../services/counsellorService";
 import { createCounselor } from "../services/accountService";
 import { updateAccountStatus } from "../services/accountService";
@@ -16,6 +17,8 @@ import { generateToken } from "../utils/tokenManager";
 import { successResponse, errorResponse } from "../utils/responseHandler";
 import { prisma } from "../config/db";
 import { Params } from "../types/express";
+import { StatusType } from "@prisma/client";
+import { STATUS_TYPES } from "../constants";
 
 /**
  * @desc    Get counselor dashboard
@@ -46,7 +49,7 @@ export const getDashboard = async (req: Request, res: Response) => {
  */
 export const getMyAssignedUsers = async (req: Request, res: Response) => {
   console.log(
-    "[CounselorController] getMyAssignedUsers - CounselorId:",
+    "[GET /api/counselor/assigned-users] getMyAssignedUsers - CounselorId:",
     req.account?.id,
   );
   try {
@@ -216,6 +219,52 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
  * @route   GET /api/counselor/list
  * @access  ChurchAdmin, SuperAdmin
  */
+export const getAllCounselors = async (req: Request, res: Response) => {
+  console.log("[GET /api/counselor/list-all] Starting - Role:", req.account?.role);
+  try {
+    const { status, page, limit } = req.query;
+
+    if (status && !STATUS_TYPES.includes(status as string)) {
+      console.log("[GET /api/counselor] Failed: Invalid status");
+      return res
+        .status(400)
+        .json(errorResponse("Invalid status. Must be 'pending, 'active', 'suspended'"));
+    }
+
+    // Only super admin can get all counselors
+    const superAdmin = await prisma.superAdmin.findUnique({
+      where: { accountId: req.account.id },
+    });
+
+    if (!superAdmin) {
+      console.log("[GET /api/counselor] Failed: super admin profile not found");
+      return res
+        .status(403)
+        .json(errorResponse("Church admin profile not found"));
+    }
+
+    const counselors = await getCounselors({
+      status: status as StatusType,
+      page: page ? parseInt(page as string) : undefined,
+      limit: limit ? parseInt(limit as string) : undefined,
+    });
+
+    res.json(
+      successResponse("Counselors fetched successfully", { counselors }),
+    );
+  } catch (error: any) {
+    console.error("[GET /api/counselor] Failed:", error.message);
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching counselors"));
+  }
+};
+
+/**
+ * @desc    Get counselors for a church
+ * @route   GET /api/counselor/list
+ * @access  ChurchAdmin, SuperAdmin
+ */
 export const list = async (req: Request, res: Response) => {
   console.log("[GET /api/counselor/list] Starting - Role:", req.account?.role);
   try {
@@ -322,7 +371,7 @@ export const update = async (req: Request<Params>, res: Response) => {
  */
 export const updateStatus = async (req: Request<Params>, res: Response) => {
   console.log(
-    "[CounselorController] updateStatus - Id:",
+    "[PATCH /api/counselor/:id/status] updateStatus - Id:",
     req.params?.id,
     "Status:",
     req.body?.status,

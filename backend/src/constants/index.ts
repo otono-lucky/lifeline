@@ -1,1 +1,1 @@
-const STATUS_TYPES = ["active", "suspended"]
+export const STATUS_TYPES = ["pending", "active", "suspended"]

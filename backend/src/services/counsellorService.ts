@@ -1,6 +1,7 @@
 // services/counselorService.ts
 // Counselor business logic
 
+import { StatusType } from "@prisma/client";
 import { prisma } from "../config/db";
 
 /**
@@ -22,7 +23,7 @@ export const getCounselorDashboard = async (accountId: string) => {
             },
           },
         },
-        orderBy: { account: {createdAt: "desc"} },
+        orderBy: { account: { createdAt: "desc" } },
       },
     },
   });
@@ -34,16 +35,16 @@ export const getCounselorDashboard = async (accountId: string) => {
   // Calculate stats
   const totalAssigned = counselor.assignedUsers.length;
   const pending = counselor.assignedUsers.filter(
-    (u) => u.verificationStatus === "pending"
+    (u) => u.verificationStatus === "pending",
   ).length;
   const inProgress = counselor.assignedUsers.filter(
-    (u) => u.verificationStatus === "in_progress"
+    (u) => u.verificationStatus === "in_progress",
   ).length;
   const verified = counselor.assignedUsers.filter(
-    (u) => u.verificationStatus === "verified"
+    (u) => u.verificationStatus === "verified",
   ).length;
   const rejected = counselor.assignedUsers.filter(
-    (u) => u.verificationStatus === "rejected"
+    (u) => u.verificationStatus === "rejected",
   ).length;
 
   return {
@@ -76,7 +77,7 @@ export const getAssignedUsers = async (
     verificationStatus?: string;
     page?: number;
     limit?: number;
-  }
+  },
 ) => {
   // Get counselor
   const counselor = await prisma.counselor.findUnique({
@@ -103,7 +104,7 @@ export const getAssignedUsers = async (
       where,
       skip,
       take: limit,
-      orderBy: { account: {createdAt: "desc" }},
+      orderBy: { account: { createdAt: "desc" } },
       include: {
         account: {
           select: {
@@ -151,7 +152,7 @@ export const verifyUser = async (
   counselorAccountId: string,
   userId: string,
   status: "verified" | "rejected",
-  notes?: string
+  notes?: string,
 ) => {
   // Get counselor
   const counselor = await prisma.counselor.findUnique({
@@ -225,7 +226,43 @@ export const getCounselorsByChurch = async (churchId: string) => {
         },
       },
     },
-    orderBy: { account: {createdAt: "desc"} },
+    orderBy: { account: { createdAt: "desc" } },
+  });
+
+  return counselors;
+};
+
+export const getCounselors = async (filter: {
+  status?: StatusType;
+  page?: number;
+  limit?: number;
+}) => {
+  const { status } = filter;
+  const page = filter.page ?? 1;
+  const limit = filter.limit ?? 10;
+
+  const counselors = await prisma.counselor.findMany({
+    where: {
+      account: {
+        ...(status && { status }),
+      },
+    },
+    skip: (page - 1) * limit,
+    take: limit,
+    include: {
+      account: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          status: true,
+          createdAt: true,
+        },
+      },
+    },
+    orderBy: { account: { createdAt: "desc" } },
   });
 
   return counselors;
@@ -273,7 +310,7 @@ export const updateCounselor = async (
   data: {
     bio?: string;
     yearsExperience?: number;
-  }
+  },
 ) => {
   const counselor = await prisma.counselor.update({
     where: { id: counselorId },

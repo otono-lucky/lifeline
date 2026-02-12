@@ -182,20 +182,25 @@ export const getChurchMembers = async (
   // Determine which churchId to use
   let targetChurchId: string;
   if (requester.churchAdmin) {
+    
     targetChurchId = requester.churchAdmin.churchId;
+
     if (churchId && churchId !== targetChurchId) {
       throw new Error("Church admin can only view their own church members");
     }
+
   } else if (requester.superAdmin) {
+
     if (!churchId) throw new Error("SuperAdmin must provide churchId");
     targetChurchId = churchId;
+
   } else {
     throw new Error("Unauthorized role for viewing members");
   }
 
-  const where: any = { churchId: options.churchId };
-  if (options?.verificationStatus) {
-    where.verificationStatus = options.verificationStatus;
+  const where: any = { churchId };
+  if (verificationStatus) {
+    where.verificationStatus = verificationStatus;
   }
 
   const [members, total] = await Promise.all([
