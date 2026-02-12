@@ -7,12 +7,14 @@ import ResidenceStep from './ResidenceStep';
 import OccupationStep from './OccupationStep';
 import InterestsStep from './InterestsStep';
 import ChurchStep from './ChurchStep';
-import { useSignupMutation } from '../../../api/queries/auth';
+import { useAuth } from '../../../hooks/useAuth';
 
 const SignupForm = () => {
     const [step, setStep] = useState(1);
     const totalSteps = 6;
     const navigate = useNavigate();
+    const { signup } = useAuth();
+    const [isSubmitting, setIsSubmitting] = useState(false);
     const [formData, setFormData] = useState({
         firstName: '',
         lastName: '',
@@ -102,17 +104,34 @@ const SignupForm = () => {
         if (step > 1) setStep(step - 1);
     };
 
-    const signupMutation = useSignupMutation();
-    const isSubmitting = signupMutation.isPending;
-
     const handleSubmit = async () => {
         setErrors({});
+        setIsSubmitting(true);
 
         try {
-            const data = await signupMutation.mutateAsync(formData);
+            const data = await signup(formData);
 
             console.log('Signup Successful:', data);
-            navigate('/email-confirmation');
+            // Navigate based on user role
+            const user = data.user;
+            if (user.role === 'User') {
+                navigate('/email-confirmation');
+            } else {
+                // For other roles, navigate to their dashboard
+                switch (user.role) {
+                    case 'SuperAdmin':
+                        navigate('/dashboard/admin');
+                        break;
+                    case 'ChurchAdmin':
+                        navigate('/dashboard/church-admin');
+                        break;
+                    case 'Counselor':
+                        navigate('/dashboard/counselor');
+                        break;
+                    default:
+                        navigate('/');
+                }
+            }
         } catch (error) {
             const message =
                 error?.response?.data?.message ||
@@ -127,7 +146,7 @@ const SignupForm = () => {
             }
             console.error('Signup error:', error);
         } finally {
-            // React Query manages loading state
+            setIsSubmitting(false);
         }
     };
 

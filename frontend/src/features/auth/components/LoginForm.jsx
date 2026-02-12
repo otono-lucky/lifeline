@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import Input from '../../../components/Input';
-import { useLoginMutation } from '../../../api/queries/auth';
-import { setToken } from '../../../lib/auth';
+import { useAuth } from '../../../hooks/useAuth';
 
 const LoginForm = () => {
+    const navigate = useNavigate();
+    const { login } = useAuth();
     const [formData, setFormData] = useState({
         email: '',
-        password: '',
+        password:'',
         rememberMe: false
     });
     const [errors, setErrors] = useState({});
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -23,9 +25,6 @@ const LoginForm = () => {
             setErrors(prev => ({ ...prev, [name]: '' }));
         }
     };
-
-    const loginMutation = useLoginMutation();
-    const isSubmitting = loginMutation.isPending;
 
     const validate = () => {
         const newErrors = {};
@@ -42,19 +41,29 @@ const LoginForm = () => {
         e.preventDefault();
         if (!validate()) return;
 
+        setIsSubmitting(true);
         try {
-            const data = await loginMutation.mutateAsync({
-                email: formData.email,
-                password: formData.password,
-                rememberMe: formData.rememberMe,
-            });
-
+            const data = await login(formData.email, formData.password);
             console.log('Login Successful:', data);
-            if (data?.token) {
-                setToken(data.token);
+            
+            // Navigate to appropriate dashboard based on role
+            const user = data.user;
+            switch (user.role) {
+                case 'SuperAdmin':
+                    navigate('/dashboard/admin');
+                    break;
+                case 'ChurchAdmin':
+                    navigate('/dashboard/church-admin');
+                    break;
+                case 'Counselor':
+                    navigate('/dashboard/counselor');
+                    break;
+                case 'User':
+                    navigate('/dashboard/user');
+                    break;
+                default:
+                    navigate('/');
             }
-            alert('Login successful! Welcome to Lifeline.');
-            // Route to dashboard here in the future
         } catch (error) {
             const message =
                 error?.response?.data?.message ||
@@ -63,7 +72,7 @@ const LoginForm = () => {
             setErrors({ auth: message });
             console.error('Login error:', error);
         } finally {
-            // React Query manages loading state
+            setIsSubmitting(false);
         }
     };
 
