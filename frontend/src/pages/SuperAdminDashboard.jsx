@@ -25,7 +25,7 @@ const SuperAdminDashboard = () => {
   const [selectedChurch, setSelectedChurch] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "dashboard";
+  const activeTab = searchParams.get("tab") || "overview";
 
   // Form states
   const [churchForm, setChurchForm] = useState({
@@ -50,7 +50,7 @@ const SuperAdminDashboard = () => {
 
   // Fetch dashboard data
   useEffect(() => {
-    if (activeTab === "dashboard") {
+    if (activeTab === "overview") {
       fetchDashboard();
     }
   }, [activeTab]);
