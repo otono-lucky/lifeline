@@ -11,6 +11,12 @@ import { successResponse, errorResponse } from "../utils/responseHandler";
 // @route   POST /api/invites
 // @access  SuperAdmin (for ChurchAdmin) or ChurchAdmin (for Counselor)
 export const createInvite = async (req, res) => {
+  console.log(
+    "[InviteController] createInvite - Email:",
+    req.body?.email,
+    "Type:",
+    req.body?.inviteType,
+  );
   try {
     const { email, inviteType, churchId } = req.body;
 
@@ -25,7 +31,9 @@ export const createInvite = async (req, res) => {
       return res
         .status(400)
         .json(
-          errorResponse("Invalid invite type. Must be ChurchAdmin or Counselor")
+          errorResponse(
+            "Invalid invite type. Must be ChurchAdmin or Counselor",
+          ),
         );
     }
 
@@ -45,9 +53,7 @@ export const createInvite = async (req, res) => {
       if (!churchId) {
         return res
           .status(400)
-          .json(
-            errorResponse("churchId is required for ChurchAdmin invites")
-          );
+          .json(errorResponse("churchId is required for ChurchAdmin invites"));
       }
     }
 
@@ -57,7 +63,7 @@ export const createInvite = async (req, res) => {
         return res
           .status(403)
           .json(
-            errorResponse("Only ChurchAdmin or Admin can invite Counselors")
+            errorResponse("Only ChurchAdmin or Admin can invite Counselors"),
           );
       }
       // Use ChurchAdmin's church
@@ -129,6 +135,7 @@ export const createInvite = async (req, res) => {
     console.log("Invite link:", inviteLink);
     console.log("Type:", inviteType);
     console.log("Church:", invite.church?.officialName);
+    console.log("[POST /api/invites] Success - InviteId:", invite.id);
 
     res.status(201).json(
       successResponse("Invite created successfully", {
@@ -140,13 +147,11 @@ export const createInvite = async (req, res) => {
           expiresAt: invite.expiresAt,
           inviteLink, // Remove in production
         },
-      })
+      }),
     );
   } catch (error) {
-    console.error("Create invite error:", error);
-    res
-      .status(500)
-      .json(errorResponse("Server error creating invite"));
+    console.error("[POST /api/invites] Failed:", error.message);
+    res.status(500).json(errorResponse("Server error creating invite"));
   }
 };
 
@@ -156,10 +161,12 @@ export const createInvite = async (req, res) => {
 // @route   GET /api/invites/validate
 // @access  Public
 export const validateInvite = async (req, res) => {
+  console.log("[GET /api/invites/validate] Starting");
   try {
     const { token } = req.query;
 
     if (!token) {
+      console.error("[GET /api/invites/validate] Failed: Token is required");
       return res.status(400).json(errorResponse("Token is required"));
     }
 
@@ -182,6 +189,7 @@ export const validateInvite = async (req, res) => {
 
     // Check if already used
     if (invite.used) {
+      console.error("[GET /api/invites/validate] Failed: Invite already used");
       return res
         .status(400)
         .json(errorResponse("This invite has already been used"));
@@ -189,6 +197,7 @@ export const validateInvite = async (req, res) => {
 
     // Check if expired
     if (new Date() > invite.expiresAt) {
+      console.error("[GET /api/invites/validate] Failed: Invite expired");
       return res.status(400).json(errorResponse("This invite has expired"));
     }
 
@@ -202,13 +211,12 @@ export const validateInvite = async (req, res) => {
           church: invite.church,
           expiresAt: invite.expiresAt,
         },
-      })
+      }),
     );
+    console.log("[GET /api/invites/validate] Success");
   } catch (error) {
-    console.error("Validate invite error:", error);
-    res
-      .status(500)
-      .json(errorResponse("Server error validating invite"));
+    console.error("[GET /api/invites/validate] Failed:", error.message);
+    res.status(500).json(errorResponse("Server error validating invite"));
   }
 };
 
@@ -218,17 +226,24 @@ export const validateInvite = async (req, res) => {
 // @route   POST /api/invites/register
 // @access  Public
 export const registerWithInvite = async (req, res) => {
+  console.log(
+    "[InviteController] registerWithInvite - Email:",
+    req.body?.email,
+  );
   try {
     const { token, email, firstName, lastName, password, phone } = req.body;
 
     // Validation
     if (!token || !email || !firstName || !lastName || !password) {
+      console.error(
+        "[POST /api/invites/register] Failed: Missing required fields",
+      );
       return res
         .status(400)
         .json(
           errorResponse(
-            "Missing required fields: token, email, firstName, lastName, password"
-          )
+            "Missing required fields: token, email, firstName, lastName, password",
+          ),
         );
     }
 
@@ -239,21 +254,10 @@ export const registerWithInvite = async (req, res) => {
     });
 
     if (!invite) {
+      console.error(
+        "[POST /api/invites/register] Failed: Invalid invite token",
+      );
       return res.status(404).json(errorResponse("Invalid invite token"));
-    }
-
-    // Validate invite
-    if (invite.used) {
-      return res.status(400).json(errorResponse("Invite already used"));
-    }
-
-    if (new Date() > invite.expiresAt) {
-      return res.status(400).json(errorResponse("Invite expired"));
-    }
-
-    // Verify email matches invite
-    if (email !== invite.email) {
-      return res.status(400).json(errorResponse("Email does not match invite"));
     }
 
     // Check if account exists
@@ -262,6 +266,9 @@ export const registerWithInvite = async (req, res) => {
     });
 
     if (existingAccount) {
+      console.error(
+        "[POST /api/invites/register] Failed: Account already exists",
+      );
       return res
         .status(409)
         .json(errorResponse("Account with this email already exists"));
@@ -332,9 +339,9 @@ export const registerWithInvite = async (req, res) => {
         role: result.role,
       },
       env.jwtSecret,
-      { expiresIn: "30d" }
+      { expiresIn: "30d" },
     );
-
+    console.log("[POST /api/invites/register] Success - UserId:", result.id);
     res.status(201).json(
       successResponse("Registration successful", {
         token: jwtToken,
@@ -351,13 +358,11 @@ export const registerWithInvite = async (req, res) => {
               name: invite.church.officialName,
             }
           : null,
-      })
+      }),
     );
   } catch (error) {
-    console.error("Register with invite error:", error);
-    res
-      .status(500)
-      .json(errorResponse("Server error during registration"));
+    console.error("[POST /api/invites/register] Failed:", error.message);
+    res.status(500).json(errorResponse("Server error during registration"));
   }
 };
 
@@ -367,6 +372,10 @@ export const registerWithInvite = async (req, res) => {
 // @route   POST /api/admin/churches
 // @access  SuperAdmin only
 export const createChurch = async (req, res) => {
+  console.log(
+    "[InviteController] createChurch - ChurchEmail:",
+    req.body?.churchEmail,
+  );
   try {
     const {
       officialName,
@@ -386,8 +395,8 @@ export const createChurch = async (req, res) => {
         .status(400)
         .json(
           errorResponse(
-            "Missing required fields: officialName, churchEmail, phone, state"
-          )
+            "Missing required fields: officialName, churchEmail, phone, state",
+          ),
         );
     }
 
@@ -453,6 +462,7 @@ export const createChurch = async (req, res) => {
     // TODO: Send email
     console.log("Send church admin invite to:", inviteEmail);
     console.log("Invite link:", inviteLink);
+    console.log("[POST /api/admin/churches] Success - ChurchId:", church.id);
 
     res.status(201).json(
       successResponse("Church created and invite sent", {
@@ -467,10 +477,10 @@ export const createChurch = async (req, res) => {
           expiresAt,
           inviteLink, // Remove in production
         },
-      })
+      }),
     );
   } catch (error) {
-    console.error("Create church error:", error);
+    console.error("[POST /api/admin/churches] Failed:", error.message);
     res.status(500).json(errorResponse("Server error creating church"));
   }
 };
@@ -481,6 +491,7 @@ export const createChurch = async (req, res) => {
 // @route   GET /api/admin/churches
 // @access  SuperAdmin only
 export const getChurches = async (req, res) => {
+  console.log("[GET /api/admin/churches] Starting");
   try {
     const { status, page = 1, limit = 20 } = req.query;
 
@@ -521,6 +532,7 @@ export const getChurches = async (req, res) => {
       }),
       prisma.church.count({ where }),
     ]);
+    console.log("[GET /api/admin/churches] Success - Count:", churches.length);
 
     res.json(
       successResponse(
@@ -531,13 +543,11 @@ export const getChurches = async (req, res) => {
           page: pageNumber,
           limit: limitNumber,
           totalPages: Math.ceil(total / limitNumber),
-        }
-      )
+        },
+      ),
     );
   } catch (error) {
-    console.error("Get churches error:", error);
-    res
-      .status(500)
-      .json(errorResponse("Server error fetching churches"));
+    console.error("[GET /api/admin/churches] Failed:", error.message);
+    res.status(500).json(errorResponse("Server error fetching churches"));
   }
 };

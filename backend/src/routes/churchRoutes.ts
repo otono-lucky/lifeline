@@ -19,6 +19,7 @@ router.get("/:id", authMiddleware, requireAnyAdmin, ChurchController.getOne);
 
 // Update church
 router.put("/:id", authMiddleware, requireSuperAdmin, ChurchController.update);
+router.patch("/:id/status", authMiddleware, requireSuperAdmin, ChurchController.updateStatus);
 router.get("/:id/members", authMiddleware, requireSuperAdmin, ChurchController.getMembers);
 
 export default router;

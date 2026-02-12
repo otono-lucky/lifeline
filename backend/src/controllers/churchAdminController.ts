@@ -20,12 +20,17 @@ import { Params } from "../types/express";
  * @access  ChurchAdmin
  */
 export const getDashboard = async (req: Request, res: Response) => {
+  console.log(
+    "[ChurchAdminController] getDashboard - ChurchAdminId:",
+    req.account?.id,
+  );
   try {
     const dashboard = await getChurchAdminDashboard(req.account.id);
+    console.log("[GET /api/church-admin/dashboard] Success");
 
     res.json(successResponse("Dashboard data fetched successfully", dashboard));
   } catch (error: any) {
-    console.error("Get dashboard error:", error);
+    console.error("[GET /api/church-admin/dashboard] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching dashboard"));
@@ -38,6 +43,10 @@ export const getDashboard = async (req: Request, res: Response) => {
  * @access  ChurchAdmin
  */
 export const getMembers = async (req: Request, res: Response) => {
+  console.log(
+    "[ChurchAdminController] getMembers - ChurchAdminId:",
+    req.account?.id,
+  );
   try {
     const { verificationStatus, page, limit } = req.query;
 
@@ -46,6 +55,10 @@ export const getMembers = async (req: Request, res: Response) => {
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });
+    console.log(
+      "[GET /api/church-admin/me/members] Success - Count:",
+      result.members.length,
+    );
 
     res.json(
       successResponse(
@@ -55,7 +68,7 @@ export const getMembers = async (req: Request, res: Response) => {
       ),
     );
   } catch (error: any) {
-    console.error("Get members error:", error);
+    console.error("[GET /api/church-admin/me/members] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching members"));
@@ -68,6 +81,12 @@ export const getMembers = async (req: Request, res: Response) => {
  * @access  ChurchAdmin
  */
 export const assignCounselor = async (req: Request, res: Response) => {
+  console.log(
+    "[ChurchAdminController] assignCounselor - UserId:",
+    req.body?.userId,
+    "CounselorId:",
+    req.body?.counselorId,
+  );
   try {
     const { userId, counselorId } = req.body;
 
@@ -82,12 +101,19 @@ export const assignCounselor = async (req: Request, res: Response) => {
       userId,
       counselorId,
     );
+    console.log(
+      "[POST /api/church-admin/assign-counselor] Success - UserId:",
+      userId,
+    );
 
     res.json(
       successResponse("User assigned to counselor successfully", result),
     );
   } catch (error: any) {
-    console.error("Assign counselor error:", error);
+    console.error(
+      "[POST /api/church-admin/assign-counselor] Failed:",
+      error.message,
+    );
     res
       .status(400)
       .json(errorResponse(error.message || "Server error assigning counselor"));
@@ -100,10 +126,19 @@ export const assignCounselor = async (req: Request, res: Response) => {
  * @access  SuperAdmin
  */
 export const createChurchAdminAccount = async (req: Request, res: Response) => {
+  console.log(
+    "[ChurchAdminController] createChurchAdminAccount - ChurchId:",
+    req.body?.churchId,
+    "Email:",
+    req.body?.email,
+  );
   try {
     const { churchId, email, password, firstName, lastName, phone } = req.body;
 
     if (!churchId || !email || !password || !firstName || !lastName) {
+      console.error(
+        "[POST /api/church-admin/create-account] Failed: Missing required fields",
+      );
       return res.status(400).json(
         errorResponse("Missing required fields", {
           required: ["churchId", "email", "password", "firstName", "lastName"],
@@ -128,6 +163,10 @@ export const createChurchAdminAccount = async (req: Request, res: Response) => {
       role: result.account.role,
       firstName: result.account.firstName,
     });
+    console.log(
+      "[POST /api/church-admin/create] Success - ChurchAdminId:",
+      result.account.id,
+    );
 
     res.status(201).json(
       successResponse("Church admin account created successfully", {
@@ -147,7 +186,7 @@ export const createChurchAdminAccount = async (req: Request, res: Response) => {
       }),
     );
   } catch (error: any) {
-    console.error("Create church admin error:", error);
+    console.error("[POST /api/church-admin/create] Failed:", error.message);
     res
       .status(500)
       .json(
@@ -162,6 +201,7 @@ export const createChurchAdminAccount = async (req: Request, res: Response) => {
  * @access  SuperAdmin
  */
 export const listChurchAdmins = async (req: Request, res: Response) => {
+  console.log("[GET /api/church-admins] Starting");
   try {
     const { status, churchId, page, limit } = req.query;
 
@@ -171,6 +211,10 @@ export const listChurchAdmins = async (req: Request, res: Response) => {
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });
+    console.log(
+      "[GET /api/church-admins] Success - Count:",
+      result.churchAdmins.length,
+    );
 
     res.json(
       successResponse(
@@ -180,7 +224,7 @@ export const listChurchAdmins = async (req: Request, res: Response) => {
       ),
     );
   } catch (error: any) {
-    console.error("List church admins error:", error);
+    console.error("[GET /api/church-admins] Failed:", error.message);
     res
       .status(500)
       .json(
@@ -198,16 +242,21 @@ export const getChurchAdminDetails = async (
   req: Request<Params>,
   res: Response,
 ) => {
+  console.log(
+    "[ChurchAdminController] getChurchAdminDetails - Id:",
+    req.params?.id,
+  );
   try {
     const { id } = req.params;
 
     const churchAdmin = await getChurchAdminById(id);
+    console.log("[GET /api/church-admins/:id] Success - Id:", churchAdmin.id);
 
     res.json(
       successResponse("Church admin fetched successfully", { churchAdmin }),
     );
   } catch (error: any) {
-    console.error("Get church admin error:", error);
+    console.error("[GET /api/church-admins/:id] Failed:", error.message);
 
     if (error.message === "Church admin not found") {
       return res.status(404).json(errorResponse(error.message));

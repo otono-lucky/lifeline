@@ -10,16 +10,20 @@ import { successResponse, errorResponse } from "../utils/responseHandler";
 
 /**
  * @desc    Get SuperAdmin dashboard
- * @route   GET /api/dashboard
+ * @route   GET /api/admin/dashboard
  * @access  SuperAdmin
  */
 export const getDashboard = async (req: Request, res: Response) => {
+  console.log(
+    "[GET /api/admin/dashboard] Starting - SuperAdmin:",
+    req.account?.id,
+  );
   try {
     const dashboard = await getSuperAdminDashboard();
-
+    console.log("[GET /api/admin/dashboard] Success");
     res.json(successResponse("Dashboard data fetched successfully", dashboard));
   } catch (error: any) {
-    console.error("Get dashboard error:", error);
+    console.error("[GET /api/admin/dashboard] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching dashboard"));
@@ -32,6 +36,7 @@ export const getDashboard = async (req: Request, res: Response) => {
  * @access  SuperAdmin
  */
 export const getStats = async (req: Request, res: Response) => {
+  console.log("[GET /api/admin/stats] Starting - Period:", req.query.period);
   try {
     const { period } = req.query;
 
@@ -41,14 +46,14 @@ export const getStats = async (req: Request, res: Response) => {
       : "week";
 
     const stats = await getPlatformStats(selectedPeriod);
-
-    res.json(successResponse("Platform statistics fetched successfully", stats));
+    console.log("[GET /api/admin/stats] Success");
+    res.json(
+      successResponse("Platform statistics fetched successfully", stats),
+    );
   } catch (error: any) {
-    console.error("Get platform stats error:", error);
+    console.error("[GET /api/admin/stats] Failed:", error.message);
     res
       .status(500)
-      .json(
-        errorResponse(error.message || "Server error fetching statistics")
-      );
+      .json(errorResponse(error.message || "Server error fetching statistics"));
   }
 };

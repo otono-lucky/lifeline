@@ -18,25 +18,32 @@ import { successResponse, errorResponse } from "../utils/responseHandler";
  * @access  SuperAdmin, Counselor (for verification purposes)
  */
 export const list = async (req: Request, res: Response) => {
+  console.log("[GET /api/users] Starting - Role:", req.account?.role);
   try {
     const { isVerified, subscriptionTier, page, limit } = req.query;
 
     const result = await getUsers({
-      isVerified: isVerified === "true" ? true : isVerified === "false" ? false : undefined,
+      isVerified:
+        isVerified === "true"
+          ? true
+          : isVerified === "false"
+            ? false
+            : undefined,
       subscriptionTier: subscriptionTier as string,
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });
+    console.log("[GET /api/users] Success - Count:", result.users.length);
 
     res.json(
       successResponse(
         "Users fetched successfully",
         { users: result.users },
-        result.pagination
-      )
+        result.pagination,
+      ),
     );
   } catch (error: any) {
-    console.error("List users error:", error);
+    console.error("[GET /api/users] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching users"));
@@ -49,6 +56,7 @@ export const list = async (req: Request, res: Response) => {
  * @access  SuperAdmin, Counselor, User (own profile)
  */
 export const getOne = async (req: Request, res: Response) => {
+  console.log("[GET /api/users/:id] Starting request - UserId:", req.params);
   try {
     const id = String(req.params);
 
@@ -67,11 +75,14 @@ export const getOne = async (req: Request, res: Response) => {
 
     const user = await getUserById(id);
 
-    res.json(successResponse("User fetched successfully", { user }));
+    const responseData = successResponse("User fetched successfully", { user });
+    console.log("[GET /api/users/:id] ✓ Success - UserId:", user.id);
+    res.json(responseData);
   } catch (error: any) {
-    console.error("Get user error:", error);
+    console.error("[GET /api/users/:id] ✗ Failed:", error.message);
 
     if (error.message === "User not found") {
+      console.error("[GET /api/users/:id] Failed: User not found");
       return res.status(404).json(errorResponse(error.message));
     }
 
@@ -87,6 +98,7 @@ export const getOne = async (req: Request, res: Response) => {
  * @access  User (own profile), SuperAdmin
  */
 export const update = async (req: Request, res: Response) => {
+  console.log("[PUT /api/users/:id] Starting - UserId:", req.params);
   try {
     const id = String(req.params);
     const {
@@ -129,10 +141,11 @@ export const update = async (req: Request, res: Response) => {
       churchId,
       matchPreference,
     });
+    console.log("[PUT /api/users/:id] Success - UserId:", user.id);
 
     res.json(successResponse("User profile updated successfully", { user }));
   } catch (error: any) {
-    console.error("Update user error:", error);
+    console.error("[PATCH /api/users/:id/status] ✗ Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error updating user"));
@@ -145,6 +158,12 @@ export const update = async (req: Request, res: Response) => {
  * @access  Counselor, SuperAdmin
  */
 export const updateVerification = async (req: Request, res: Response) => {
+  console.log(
+    "[UserController] updateVerification - UserId:",
+    req.params,
+    "Status:",
+    req.body?.isVerified,
+  );
   try {
     const id = String(req.params);
     const { isVerified } = req.body;
@@ -156,19 +175,25 @@ export const updateVerification = async (req: Request, res: Response) => {
     }
 
     const user = await updateUserVerification(id, isVerified);
-
+    console.log(
+      "[PATCH /api/users/:id/verification] Success - UserId:",
+      user.id,
+    );
     res.json(
       successResponse(
         `User ${isVerified ? "verified" : "unverified"} successfully`,
-        { user }
-      )
+        { user },
+      ),
     );
   } catch (error: any) {
-    console.error("Update user verification error:", error);
+    console.error(
+      "[PATCH /api/users/:id/verification] ✗ Failed:",
+      error.message,
+    );
     res
       .status(500)
       .json(
-        errorResponse(error.message || "Server error updating verification")
+        errorResponse(error.message || "Server error updating verification"),
       );
   }
 };
@@ -179,6 +204,12 @@ export const updateVerification = async (req: Request, res: Response) => {
  * @access  SuperAdmin
  */
 export const updateStatus = async (req: Request, res: Response) => {
+  console.log(
+    "[UserController] updateStatus - UserId:",
+    req.params?.id,
+    "Status:",
+    req.body?.status,
+  );
   try {
     const id = String(req.params.id);
     const { status } = req.body;
@@ -196,22 +227,30 @@ export const updateStatus = async (req: Request, res: Response) => {
     });
 
     if (!user) {
+      console.error("[PATCH /api/users/:id/status] Failed: User not found");
       return res.status(404).json(errorResponse("User not found"));
     }
 
     // Update account status
     const account = await updateAccountStatus(user.accountId, status);
-
+    console.log(
+      "[PATCH /api/users/:id/status] Success - UserId:",
+      id,
+      "Status:",
+      status,
+    );
     res.json(
       successResponse(
         `User ${status === "active" ? "activated" : "suspended"} successfully`,
-        { status: account.status }
-      )
+        { status: account.status },
+      ),
     );
   } catch (error: any) {
-    console.error("Update user status error:", error);
+    console.error("[PATCH /api/users/:id/status] Failed:", error.message);
     res
       .status(500)
-      .json(errorResponse(error.message || "Server error updating user status"));
+      .json(
+        errorResponse(error.message || "Server error updating user status"),
+      );
   }
 };

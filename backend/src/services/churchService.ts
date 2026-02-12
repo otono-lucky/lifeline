@@ -282,6 +282,20 @@ export const updateChurch = async (
   return church;
 };
 
+export const updateChurchStatus = async (
+  churchId: string,
+  status: string,
+) => {
+  const church = await prisma.church.update({
+    where: { id: churchId },
+    data: {
+      status: status as StatusType,
+    },
+  });
+
+  return church;
+};
+
 /**
  * Activate church (when first admin is assigned)
  */

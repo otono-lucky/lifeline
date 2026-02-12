@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { PrismaClient } from "@prisma/client";
-import { prisma } from "../src/config/db.js";
+import { prisma } from "../src/config/db";
 
 async function main() {
   const passwordHash = await bcrypt.hash("Password123!", 10);
@@ -15,6 +15,8 @@ async function main() {
       phone: "0000000000",
       password: passwordHash,
       role: "SuperAdmin",
+      isEmailVerified: true,
+      status: "active"
     },
   });
 

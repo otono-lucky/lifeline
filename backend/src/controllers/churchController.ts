@@ -8,6 +8,7 @@ import {
   getChurchById,
   updateChurch,
   getChurchMembers,
+  updateChurchStatus,
 } from "../services/churchService";
 import { prisma } from "../config/db";
 import { errorResponse, successResponse } from "../utils/responseHandler";
@@ -19,6 +20,7 @@ import { Params } from "../types/express";
  * @access  SuperAdmin
  */
 export const create = async (req: Request, res: Response) => {
+  console.log("[POST /api/churches] Starting - Email:", req.body?.email);
   try {
     const { officialName, aka, email, phone, state, lga, city, address } =
       req.body;
@@ -29,8 +31,8 @@ export const create = async (req: Request, res: Response) => {
         .status(400)
         .json(
           errorResponse(
-            "Missing required fields: officialName, email, phone, state"
-          )
+            "Missing required fields: officialName, email, phone, state",
+          ),
         );
     }
 
@@ -40,7 +42,9 @@ export const create = async (req: Request, res: Response) => {
     });
 
     if (!superAdmin) {
-      return res.status(403).json(errorResponse("SuperAdmin profile not found"));
+      return res
+        .status(403)
+        .json(errorResponse("SuperAdmin profile not found"));
     }
 
     const church = await createChurch({
@@ -54,12 +58,13 @@ export const create = async (req: Request, res: Response) => {
       address,
       createdBy: superAdmin.id,
     });
+    console.log("[POST /api/churches] Success - ChurchId:", church.id);
 
     res
       .status(201)
       .json(successResponse("Church created successfully", { church }));
   } catch (error: any) {
-    console.error("Create church error:", error);
+    console.error("[POST /api/churches] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error creating church"));
@@ -72,6 +77,7 @@ export const create = async (req: Request, res: Response) => {
  * @access  SuperAdmin
  */
 export const list = async (req: Request, res: Response) => {
+  console.log("[GET /api/churches] Starting");
   try {
     const { status, page, limit } = req.query;
 
@@ -80,16 +86,17 @@ export const list = async (req: Request, res: Response) => {
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });
+    console.log("[GET /api/churches] Success - Count:", result.churches.length);
 
     res.json(
       successResponse(
         "Churches fetched successfully",
         { churches: result.churches },
-        result.pagination
-      )
+        result.pagination,
+      ),
     );
   } catch (error: any) {
-    console.error("List churches error:", error);
+    console.error("[GET /api/churches] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching churches"));
@@ -102,14 +109,16 @@ export const list = async (req: Request, res: Response) => {
  * @access  SuperAdmin, ChurchAdmin (own church)
  */
 export const getOne = async (req: Request, res: Response) => {
+  console.log("[GET /api/churches/:id] Starting - Id:", req.params?.id);
   try {
     const id = String(req.params.id);
 
     const church = await getChurchById(id);
+    console.log("[GET /api/churches/:id] Success - Id:", church.id);
 
     res.json(successResponse("Church fetched successfully", { church }));
   } catch (error: any) {
-    console.error("Get church error:", error);
+    console.error("[GET /api/churches/:id] Failed:", error.message);
 
     if (error.message === "Church not found") {
       return res.status(404).json(errorResponse(error.message));
@@ -122,9 +131,13 @@ export const getOne = async (req: Request, res: Response) => {
 };
 
 export const getMembers = async (req: Request<Params>, res: Response) => {
+  console.log(
+    "[GET /api/churches/:id/members] Starting - ChurchId:",
+    req.params?.id,
+  );
   try {
     const { verificationStatus, page, limit } = req.query;
-    const {id} = req.params
+    const { id } = req.params;
 
     const result = await getChurchMembers(req.account.id, {
       churchId: id,
@@ -132,16 +145,20 @@ export const getMembers = async (req: Request<Params>, res: Response) => {
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });
+    console.log(
+      "[GET /api/churches/:id/members] Success - Count:",
+      result.members.length,
+    );
 
     res.json(
       successResponse(
         "Members fetched successfully",
         { members: result.members },
-        result.pagination
-      )
+        result.pagination,
+      ),
     );
   } catch (error: any) {
-    console.error("Get members error:", error);
+    console.error("[GET /api/churches/:id/members] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching members"));
@@ -153,9 +170,35 @@ export const getMembers = async (req: Request<Params>, res: Response) => {
  * @route   PUT /api/churches/:id
  * @access  SuperAdmin
  */
-export const update = async (req: Request, res: Response) => {
+export const updateStatus = async (req: Request<Params, {}, { status: string }>, res: Response) => {
+  console.log("[PUT /api/churches/:id/status] Starting - Id:", req.params?.id);
   try {
-    const id = String(req.params?.id)
+    const id = req.params?.id;
+    const { status } = req.body;
+
+    if (!["active", "suspended"].includes(status)) {
+      console.error("[PUT /api/churches/:id/status] Failed: Invalid status");
+      return res
+        .status(400)
+        .json(errorResponse("Invalid status. Must be: active or suspended"));
+    }
+
+    const church = await updateChurchStatus(id, status);
+    console.log("[PUT /api/churches/:id/status] Success - Status:", church.status);
+
+    res.json(successResponse("Church activated successfully", { church }));
+  } catch (error: any) {
+    console.error("[PUT /api/churches/:id/status] Failed:", error.message);
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error updating church"));
+  }
+};
+
+export const update = async (req: Request, res: Response) => {
+  console.log("[PUT /api/churches/:id] Starting - Id:", req.params?.id);
+  try {
+    const id = String(req.params?.id);
     const { officialName, aka, phone, state, lga, city, address } = req.body;
 
     const church = await updateChurch(id, {
@@ -167,10 +210,11 @@ export const update = async (req: Request, res: Response) => {
       city,
       address,
     });
+    console.log("[PUT /api/churches/:id] Success - Id:", church.id);
 
     res.json(successResponse("Church updated successfully", { church }));
   } catch (error: any) {
-    console.error("Update church error:", error);
+    console.error("[PUT /api/churches/:id] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error updating church"));

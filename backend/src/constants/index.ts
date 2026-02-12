@@ -1,0 +1,1 @@
+const STATUS_TYPES = ["active", "suspended"]

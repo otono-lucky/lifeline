@@ -4,6 +4,7 @@
 import bcrypt from "bcryptjs";
 import { prisma } from "../config/db";
 import { activateChurch } from "./churchService";
+import { hashPassword } from "../utils/passwordHasher";
 
 interface CreateAccountData {
   email: string;
@@ -40,8 +41,7 @@ export const createAccount = async (data: CreateAccountData) => {
   }
 
   // Hash password
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(data.password, salt);
+  const hashedPassword = await hashPassword(data.password);
 
   // Create account
   const account = await prisma.account.create({
@@ -53,6 +53,7 @@ export const createAccount = async (data: CreateAccountData) => {
       phone: data.phone,
       role: data.role,
       status: "active",
+      isEmailVerified: data.role === "User" ? false : true,
     },
   });
 

@@ -23,14 +23,16 @@ import { Params } from "../types/express";
  * @access  Counselor
  */
 export const getDashboard = async (req: Request, res: Response) => {
+  console.log(
+    "[CounselorController] getDashboard - CounselorId:",
+    req.account?.id,
+  );
   try {
     const dashboard = await getCounselorDashboard(req.account.id);
 
-    res.json(
-      successResponse("Dashboard data fetched successfully", dashboard)
-    );
+    res.json(successResponse("Dashboard data fetched successfully", dashboard));
   } catch (error: any) {
-    console.error("Get dashboard error:", error);
+    console.error("[GET /api/counselor/dashboard] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching dashboard"));
@@ -43,6 +45,10 @@ export const getDashboard = async (req: Request, res: Response) => {
  * @access  Counselor
  */
 export const getMyAssignedUsers = async (req: Request, res: Response) => {
+  console.log(
+    "[CounselorController] getMyAssignedUsers - CounselorId:",
+    req.account?.id,
+  );
   try {
     const { verificationStatus, page, limit } = req.query;
 
@@ -51,20 +57,23 @@ export const getMyAssignedUsers = async (req: Request, res: Response) => {
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });
-
+    console.log(
+      "[GET /api/counselor/assigned-users] Success - Count:",
+      result.users.length,
+    );
     res.json(
       successResponse(
         "Assigned users fetched successfully",
         { users: result.users },
-        result.pagination
-      )
+        result.pagination,
+      ),
     );
   } catch (error: any) {
-    console.error("Get assigned users error:", error);
+    console.error("[GET /api/counselor/assigned-users] Failed:", error.message);
     res
       .status(500)
       .json(
-        errorResponse(error.message || "Server error fetching assigned users")
+        errorResponse(error.message || "Server error fetching assigned users"),
       );
   }
 };
@@ -74,7 +83,16 @@ export const getMyAssignedUsers = async (req: Request, res: Response) => {
  * @route   POST /api/counselor/verify-user/:userId
  * @access  Counselor
  */
-export const verifyUserStatus = async (req: Request<{userId: string}>, res: Response) => {
+export const verifyUserStatus = async (
+  req: Request<{ userId: string }>,
+  res: Response,
+) => {
+  console.log(
+    "[CounselorController] verifyUserStatus - UserId:",
+    req.params?.userId,
+    "Status:",
+    req.body?.status,
+  );
   try {
     const { userId } = req.params;
     const { status, notes } = req.body;
@@ -83,20 +101,26 @@ export const verifyUserStatus = async (req: Request<{userId: string}>, res: Resp
       return res
         .status(400)
         .json(
-          errorResponse("Invalid status. Must be 'verified' or 'rejected'")
+          errorResponse("Invalid status. Must be 'verified' or 'rejected'"),
         );
     }
 
     const result = await verifyUser(req.account.id, userId, status, notes);
-
+    console.log(
+      "[POST /api/counselor/verify-user/:userId] Success - UserId:",
+      userId,
+    );
     res.json(
       successResponse(
         `User ${status === "verified" ? "verified" : "rejected"} successfully`,
-        result
-      )
+        result,
+      ),
     );
   } catch (error: any) {
-    console.error("Verify user error:", error);
+    console.error(
+      "[POST /api/counselor/verify-user/:userId] Failed:",
+      error.message,
+    );
     res
       .status(400)
       .json(errorResponse(error.message || "Server error verifying user"));
@@ -109,6 +133,12 @@ export const verifyUserStatus = async (req: Request<{userId: string}>, res: Resp
  * @access  ChurchAdmin, SuperAdmin
  */
 export const createCounselorAccount = async (req: Request, res: Response) => {
+  console.log(
+    "[CounselorController] createCounselorAccount - ChurchId:",
+    req.body?.churchId,
+    "Email:",
+    req.body?.email,
+  );
   try {
     const {
       churchId,
@@ -122,10 +152,13 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
     } = req.body;
 
     if (!churchId || !email || !password || !firstName || !lastName) {
+      console.error(
+        "[POST /api/counselor/create-account] Failed: Missing required fields",
+      );
       return res.status(400).json(
         errorResponse("Missing required fields", {
           required: ["churchId", "email", "password", "firstName", "lastName"],
-        })
+        }),
       );
     }
 
@@ -137,9 +170,7 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
       lastName,
       phone,
       bio,
-      yearsExperience: yearsExperience
-        ? parseInt(yearsExperience)
-        : undefined,
+      yearsExperience: yearsExperience ? parseInt(yearsExperience) : undefined,
       role: "Counselor",
     });
 
@@ -150,6 +181,10 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
       role: result.account.role,
       firstName: result.account.firstName,
     });
+    console.log(
+      "[POST /api/counselor/create] Success - CounselorId:",
+      result.account.id,
+    );
 
     res.status(201).json(
       successResponse("Counselor account created successfully", {
@@ -166,10 +201,10 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
           yearsExperience: result.counselor.yearsExperience,
         },
         token,
-      })
+      }),
     );
   } catch (error: any) {
-    console.error("Create counselor error:", error);
+    console.error("[POST /api/counselor/create] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error creating counselor"));
@@ -182,6 +217,7 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
  * @access  ChurchAdmin, SuperAdmin
  */
 export const list = async (req: Request, res: Response) => {
+  console.log("[GET /api/counselor/list] Starting - Role:", req.account?.role);
   try {
     const { churchId } = req.query;
 
@@ -190,9 +226,13 @@ export const list = async (req: Request, res: Response) => {
     // If SuperAdmin, churchId is required in query
     if (req.account.role === "SuperAdmin") {
       if (!churchId) {
-        return res.status(400).json(
-          errorResponse("churchId query parameter is required for SuperAdmin")
-        );
+        return res
+          .status(400)
+          .json(
+            errorResponse(
+              "churchId query parameter is required for SuperAdmin",
+            ),
+          );
       }
       targetChurchId = churchId as string;
     } else {
@@ -202,9 +242,9 @@ export const list = async (req: Request, res: Response) => {
       });
 
       if (!churchAdmin) {
-        return res.status(403).json(
-          errorResponse("Church admin profile not found")
-        );
+        return res
+          .status(403)
+          .json(errorResponse("Church admin profile not found"));
       }
 
       targetChurchId = churchAdmin.churchId;
@@ -212,9 +252,11 @@ export const list = async (req: Request, res: Response) => {
 
     const counselors = await getCounselorsByChurch(targetChurchId);
 
-    res.json(successResponse("Counselors fetched successfully", { counselors }));
+    res.json(
+      successResponse("Counselors fetched successfully", { counselors }),
+    );
   } catch (error: any) {
-    console.error("List counselors error:", error);
+    console.error("[GET /api/counselor/list] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching counselors"));
@@ -227,14 +269,16 @@ export const list = async (req: Request, res: Response) => {
  * @access  ChurchAdmin, SuperAdmin, Counselor (own profile)
  */
 export const getOne = async (req: Request<Params>, res: Response) => {
+  console.log("[GET /api/counselor/:id] Starting - Id:", req.params?.id);
   try {
     const { id } = req.params;
 
     const counselor = await getCounselorById(id);
+    console.log("[GET /api/counselor/:id] Success - Id:", counselor.id);
 
     res.json(successResponse("Counselor fetched successfully", { counselor }));
   } catch (error: any) {
-    console.error("Get counselor error:", error);
+    console.error("[GET /api/counselor/:id] Failed:", error.message);
 
     if (error.message === "Counselor not found") {
       return res.status(404).json(errorResponse(error.message));
@@ -252,22 +296,19 @@ export const getOne = async (req: Request<Params>, res: Response) => {
  * @access  ChurchAdmin, Counselor (own profile)
  */
 export const update = async (req: Request<Params>, res: Response) => {
+  console.log("[PUT /api/counselor/:id] Starting - Id:", req.params?.id);
   try {
     const { id } = req.params;
     const { bio, yearsExperience } = req.body;
 
     const counselor = await updateCounselor(id, {
       bio,
-      yearsExperience: yearsExperience
-        ? parseInt(yearsExperience)
-        : undefined,
+      yearsExperience: yearsExperience ? parseInt(yearsExperience) : undefined,
     });
 
-    res.json(
-      successResponse("Counselor updated successfully", { counselor })
-    );
+    res.json(successResponse("Counselor updated successfully", { counselor }));
   } catch (error: any) {
-    console.error("Update counselor error:", error);
+    console.error("[PUT /api/counselor/:id] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error updating counselor"));
@@ -280,6 +321,12 @@ export const update = async (req: Request<Params>, res: Response) => {
  * @access  ChurchAdmin, SuperAdmin
  */
 export const updateStatus = async (req: Request<Params>, res: Response) => {
+  console.log(
+    "[CounselorController] updateStatus - Id:",
+    req.params?.id,
+    "Status:",
+    req.body?.status,
+  );
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -302,19 +349,26 @@ export const updateStatus = async (req: Request<Params>, res: Response) => {
 
     // Update account status
     const account = await updateAccountStatus(counselor.accountId, status);
-
+    console.log(
+      "[PATCH /api/counselor/:id/status] Success - Id:",
+      id,
+      "Status:",
+      status,
+    );
     res.json(
       successResponse(
         `Counselor ${status === "active" ? "activated" : "suspended"} successfully`,
-        { status: account.status }
-      )
+        { status: account.status },
+      ),
     );
   } catch (error: any) {
-    console.error("Update counselor status error:", error);
+    console.error("[PATCH /api/counselor/:id/status] Failed:", error.message);
     res
       .status(500)
       .json(
-        errorResponse(error.message || "Server error updating counselor status")
+        errorResponse(
+          error.message || "Server error updating counselor status",
+        ),
       );
   }
 };
