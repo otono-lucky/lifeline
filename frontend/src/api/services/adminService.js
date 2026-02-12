@@ -64,4 +64,15 @@ export const adminService = {
     const response = await apiClient.get(`/church-admin/${id}`);
     return response.data;
   },
+
+  // Get church admin by ID
+  getCounsellor: async (id) => {
+    const response = await apiClient.get(`/counselor/${id}`);
+    return response.data;
+  },
+  // Get all church admins
+  getCounsellors: async (params = {}) => {
+    const response = await apiClient.get("/counselor/list-all", { params });
+    return response.data;
+  },
 };

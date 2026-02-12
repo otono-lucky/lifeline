@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { DashboardLayout } from "../components/DashboardLayout";
+import { DashboardLayout } from "../features/dashboard/components/DashboardLayout";
 import {
   Card,
   StatCard,
@@ -9,14 +9,20 @@ import {
   Toast,
   ConfirmModal,
 } from "../components";
-import { adminService, churchService } from "../api/services";
+import {
+  adminService,
+  churchAdminService,
+  churchService,
+} from "../api/services";
 import { NavLink, useSearchParams } from "react-router-dom";
+import CreateCounsellorModal from "../features/dashboard/components/CreateCounsellorModal";
 
 const SuperAdminDashboard = () => {
   // const [activeTab, setActiveTab] = useState("dashboard");
   const [churches, setChurches] = useState([]);
   const [users, setUsers] = useState([]);
   const [churchAdmins, setChurchAdmins] = useState([]);
+  const [counselors, setCounselors] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -25,6 +31,7 @@ const SuperAdminDashboard = () => {
   const [selectedChurch, setSelectedChurch] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [showCreateCounselor, setShowCreateCounselor] = useState(false);
   const activeTab = searchParams.get("tab") || "overview";
 
   // Form states
@@ -58,19 +65,28 @@ const SuperAdminDashboard = () => {
   const fetchDashboard = async () => {
     setLoading(true);
     try {
-      const [dashboardRes, statsRes, churchesRes, usersRes, adminsRes] =
-        await Promise.all([
-          adminService.getDashboard(),
-          adminService.getStats(),
-          churchService.getChurches({ limit: 10 }),
-          adminService.getUsers({ limit: 10 }),
-          adminService.getChurchAdmins({ limit: 10 }),
-        ]);
+      const [
+        dashboardRes,
+        statsRes,
+        churchesRes,
+        usersRes,
+        adminsRes,
+        counselorRes,
+      ] = await Promise.all([
+        adminService.getDashboard(),
+        adminService.getStats(),
+        churchService.getChurches({ limit: 10 }),
+        adminService.getUsers({ limit: 10 }),
+        adminService.getChurchAdmins({ limit: 10 }),
+        adminService.getCounsellors({ limit: 10 }),
+      ]);
 
       if (dashboardRes.success) setStats(dashboardRes.data);
       if (churchesRes.success) setChurches(churchesRes.data.churches || []);
       if (usersRes.success) setUsers(usersRes.data.users || []);
       if (adminsRes.success) setChurchAdmins(adminsRes.data.churchAdmins || []);
+      if (counselorRes.success)
+        setCounselors(counselorRes.data.counselors || []);
     } catch (error) {
       setToast({ type: "error", message: "Failed to fetch dashboard data" });
     } finally {
@@ -87,6 +103,34 @@ const SuperAdminDashboard = () => {
       }
     } catch (error) {
       setToast({ type: "error", message: "Failed to fetch churches" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchChurchAdmins = async () => {
+    setLoading(true);
+    try {
+      const response = await adminService.getChurchAdmins();
+      if (response.success) {
+        setChurches(response.data.churchAdmins || []);
+      }
+    } catch (error) {
+      setToast({ type: "error", message: "Failed to fetch church admins" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCounselors = async () => {
+    setLoading(true);
+    try {
+      const response = await adminService.getCounsellors();
+      if (response.success) {
+        setChurches(response.data.counselors || []);
+      }
+    } catch (error) {
+      setToast({ type: "error", message: "Failed to fetch counselors" });
     } finally {
       setLoading(false);
     }
@@ -153,10 +197,8 @@ const SuperAdminDashboard = () => {
         });
         setShowCreateAdmin(false);
         // Refetch data
-        const adminsRes = await adminService.getChurchAdmins();
-        if (adminsRes.success) {
-          setChurchAdmins(adminsRes.data.churchAdmins || []);
-        }
+        await fetchChurchAdmins();
+        // await fetchChurches();
       }
     } catch (error) {
       setToast({ type: "error", message: "Failed to create church admin" });
@@ -200,11 +242,12 @@ const SuperAdminDashboard = () => {
         { id: "overview", label: "📊 Dashboard" },
         { id: "churches", label: "⛪ Manage Churches" },
         { id: "users", label: "👥 Manage Users" },
+        { id: "counselors", label: "🔑 Counselors" },
         { id: "admins", label: "🔑 Church Admins" },
       ].map((item) => (
-        <button         
+        <button
           key={item.id}
-          onClick={() => setSearchParams({ tab: item.id})}
+          onClick={() => setSearchParams({ tab: item.id })}
           // onClick={() => setActiveTabitem.id)}
           className={`w-full text-left px-4 py-2 rounded-lg transition-colors ${
             activeTab === item.id
@@ -237,6 +280,21 @@ const SuperAdminDashboard = () => {
   ];
 
   const adminColumns = [
+    { key: "id", label: "ID", render: (id) => id.substring(0, 8) },
+    {
+      key: "account",
+      label: "Name",
+      render: (_, row) => `${row.account?.firstName} ${row.account?.lastName}`,
+    },
+    { key: "email", label: "Email", render: (_, row) => row.account?.email },
+    {
+      key: "church",
+      label: "Church",
+      render: (_, row) => row.church?.officialName,
+    },
+  ];
+
+  const counselorColumns = [
     { key: "id", label: "ID", render: (id) => id.substring(0, 8) },
     {
       key: "account",
@@ -332,7 +390,12 @@ const SuperAdminDashboard = () => {
                   <Button
                     size="sm"
                     variant="outline"
-                    onClick={() => handleVerifyChurch(row.id, row.status === "active" ? "suspended" : "active")}
+                    onClick={() =>
+                      handleVerifyChurch(
+                        row.id,
+                        row.status === "active" ? "suspended" : "active",
+                      )
+                    }
                     // disabled={row.status === "active"}
                   >
                     {row.status === "active" ? "Deactivate" : "Activate"}
@@ -382,6 +445,26 @@ const SuperAdminDashboard = () => {
             <Table
               columns={adminColumns}
               data={churchAdmins}
+              loading={loading}
+            />
+          </Card>
+        </div>
+      )}
+
+      {/* Counsellors Management */}
+      {activeTab === "counselors" && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h1 className="text-3xl font-bold text-gray-900">Counselors</h1>
+            <Button onClick={() => setShowCreateCounselor(true)}>
+              Create Counsellor
+            </Button>
+          </div>
+
+          <Card>
+            <Table
+              columns={counselorColumns}
+              data={counselors}
               loading={loading}
             />
           </Card>
@@ -575,6 +658,15 @@ const SuperAdminDashboard = () => {
           />
         </form>
       </Modal>
+
+      {/* Create Counselor Modal */}
+      <CreateCounsellorModal
+        onToast={setToast}
+        onShowCreateCounselor={() => setShowCreateCounselor(false)}
+        showCreateCounselor={showCreateCounselor}
+        fetchCounselors={fetchCounselors}
+        churches={churches}
+      />
 
       {/* Toast */}
       {toast && (
