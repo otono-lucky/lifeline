@@ -44,7 +44,7 @@ export const getDashboard = async (req: Request, res: Response) => {
  */
 export const getMembers = async (req: Request, res: Response) => {
   console.log(
-    "[ChurchAdminController] getMembers - ChurchAdminId:",
+    "[GET /api/church-admin/me/members] getMembers - ChurchAdminId:",
     req.account?.id,
   );
   try {

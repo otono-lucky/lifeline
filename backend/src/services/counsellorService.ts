@@ -225,6 +225,16 @@ export const getCounselorsByChurch = async (churchId: string) => {
           createdAt: true,
         },
       },
+      church: {
+        select: {
+          id: true,
+          officialName: true,
+          aka: true,
+          email: true,
+          phone: true,
+          status: true,
+        },
+      },
     },
     orderBy: { account: { createdAt: "desc" } },
   });
@@ -259,6 +269,16 @@ export const getCounselors = async (filter: {
           phone: true,
           status: true,
           createdAt: true,
+        },
+      },
+      church: {
+        select: {
+          id: true,
+          officialName: true,
+          aka: true,
+          email: true,
+          phone: true,
+          status: true,
         },
       },
     },
