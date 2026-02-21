@@ -54,8 +54,8 @@ export const AuthProvider = ({ children }) => {
     setError(null);
     try {
       const response = await authService.signup(data);
-      if (response.success && response.data.token) {
-        localStorage.setItem("token", response.data.token);
+      if (response.success) {
+        // localStorage.setItem("token", response.data.token);
         setUser(response.data.user);
         return response.data;
       } else {

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import AuthLayout from '../features/auth/components/AuthLayout';
+import ResendVerificationForm from '../features/auth/components/ResendVerificationForm';
 
 const EmailConfirmationPage = () => {
     return (
@@ -15,16 +16,8 @@ const EmailConfirmationPage = () => {
                     <p className="text-slate-500 italic">We just dropped a verification link at your email. Go ahead and click it—it's like a digital handshake.</p>
                 </div>
 
-                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100 mb-8">
-                    <div className="flex items-center gap-4 text-slate-600 mb-4 text-sm font-medium">
-                        <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                            📧
-                        </div>
-                        Didn't get the email?
-                    </div>
-                    <button className="text-blue-600 font-bold hover:underline text-sm transition-all">
-                        Resend Verification Link
-                    </button>
+                <div className="mb-8">
+                    <ResendVerificationForm />
                 </div>
 
                 <Link

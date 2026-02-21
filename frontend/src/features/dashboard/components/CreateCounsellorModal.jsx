@@ -151,19 +151,6 @@ function CreateCounsellorModal({
             }
             rows="3"
           />
-          <label className="pt-4">Years of Experience</label>
-          <input
-            type="number"
-            placeholder="Years of Experience"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={counselorForm.yearsExperience}
-            onChange={(e) =>
-              setCounselorForm({
-                ...counselorForm,
-                yearsExperience: parseInt(e.target.value),
-              })
-            }
-          />
         </form>
       </Modal>
     </>
