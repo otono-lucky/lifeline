@@ -12,6 +12,9 @@ const router = express.Router();
 router.post("/", authMiddleware, requireSuperAdmin, ChurchController.create);
 
 // List churches
+// Public list for signup and unauthenticated clients
+router.get("/public", ChurchController.publicList);
+
 router.get("/", authMiddleware, requireSuperAdmin, ChurchController.list);
 
 // Get single church
@@ -19,7 +22,17 @@ router.get("/:id", authMiddleware, requireAnyAdmin, ChurchController.getOne);
 
 // Update church
 router.put("/:id", authMiddleware, requireSuperAdmin, ChurchController.update);
-router.patch("/:id/status", authMiddleware, requireSuperAdmin, ChurchController.updateStatus);
-router.get("/:id/members", authMiddleware, requireSuperAdmin, ChurchController.getMembers);
+router.patch(
+  "/:id/status",
+  authMiddleware,
+  requireSuperAdmin,
+  ChurchController.updateStatus,
+);
+router.get(
+  "/:id/members",
+  authMiddleware,
+  requireSuperAdmin,
+  ChurchController.getMembers,
+);
 
 export default router;

@@ -329,14 +329,12 @@ export const updateCounselor = async (
   counselorId: string,
   data: {
     bio?: string;
-    yearsExperience?: number;
   },
 ) => {
   const counselor = await prisma.counselor.update({
     where: { id: counselorId },
     data: {
       bio: data.bio,
-      yearsExperience: data.yearsExperience,
     },
   });
 

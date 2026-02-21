@@ -112,6 +112,41 @@ export const getChurches = async (filters?: {
 };
 
 /**
+ * Get public list of active churches with minimal fields for signup
+ */
+export const getPublicChurches = async (options?: { limit?: number }) => {
+  const limit = options?.limit || 200;
+
+  const churches = await prisma.church.findMany({
+    where: { status: "active" },
+    take: limit,
+    orderBy: { officialName: "asc" },
+    select: {
+      id: true,
+      officialName: true,
+      aka: true,
+      state: true,
+      lga: true,
+      city: true,
+      address: true,
+    },
+  });
+
+  // Format to ensure consistent shape
+  return churches.map((c) => ({
+    id: c.id,
+    officialName: c.officialName,
+    aka: c.aka,
+    address: {
+      state: c.state,
+      lga: c.lga,
+      city: c.city,
+      address: c.address,
+    },
+  }));
+};
+
+/**
  * Get single church by ID
  */
 export const getChurchById = async (churchId: string) => {
@@ -162,7 +197,7 @@ export const getChurchById = async (churchId: string) => {
 export const getChurchMembers = async (
   requesterId: string,
   options?: {
-    churchId?: string,
+    churchId?: string;
     verificationStatus?: string;
     page?: number;
     limit?: number;
@@ -182,18 +217,14 @@ export const getChurchMembers = async (
   // Determine which churchId to use
   let targetChurchId: string;
   if (requester.churchAdmin) {
-    
     targetChurchId = requester.churchAdmin.churchId;
 
     if (churchId && churchId !== targetChurchId) {
       throw new Error("Church admin can only view their own church members");
     }
-
   } else if (requester.superAdmin) {
-
     if (!churchId) throw new Error("SuperAdmin must provide churchId");
     targetChurchId = churchId;
-
   } else {
     throw new Error("Unauthorized role for viewing members");
   }
@@ -287,10 +318,7 @@ export const updateChurch = async (
   return church;
 };
 
-export const updateChurchStatus = async (
-  churchId: string,
-  status: string,
-) => {
+export const updateChurchStatus = async (churchId: string, status: string) => {
   const church = await prisma.church.update({
     where: { id: churchId },
     data: {

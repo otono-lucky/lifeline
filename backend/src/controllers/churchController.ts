@@ -104,6 +104,32 @@ export const list = async (req: Request, res: Response) => {
 };
 
 /**
+ * @desc    Public list of active churches (minimal fields)
+ * @route   GET /api/churches/public
+ * @access  Public
+ */
+export const publicList = async (req: Request, res: Response) => {
+  console.log('[GET /api/churches/public] Starting');
+  try {
+    const { limit } = req.query;
+
+    // Lazy-import service to avoid circular deps
+    const { getPublicChurches } = await import('../services/churchService');
+
+    const churches = await getPublicChurches({
+      limit: limit ? parseInt(limit as string) : undefined,
+    });
+
+    console.log('[GET /api/churches/public] Success - Count:', churches.length);
+
+    res.json(successResponse('Churches fetched successfully', { churches }));
+  } catch (error: any) {
+    console.error('[GET /api/churches/public] Failed:', error.message);
+    res.status(500).json(errorResponse(error.message || 'Server error fetching churches'));
+  }
+};
+
+/**
  * @desc    Get single church
  * @route   GET /api/churches/:id
  * @access  SuperAdmin, ChurchAdmin (own church)

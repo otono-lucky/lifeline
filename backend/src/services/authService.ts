@@ -6,40 +6,38 @@ import crypto from "crypto";
 import { prisma } from "../config/db";
 import { sendEmail } from "../services/emailService";
 import env from "../config/env";
+import { Account } from "@prisma/client";
 
 /**
  * Request email verification
  * Generates token and sends verification email
  */
-export const requestEmailVerification = async (accountId: string) => {
-  const account = await prisma.account.findUnique({
-    where: { id: accountId },
-  });
-
-  if (!account) {
-    throw new Error("Account not found");
-  }
-
-  if (account.isEmailVerified) {
-    throw new Error("Email already verified");
+export const requestEmailVerification = async (
+  partialAccount: Partial<Account>,
+) => {
+  if (!partialAccount.id || !partialAccount.email) {
+    throw new Error("Account ID or Email not found");
   }
 
   // Generate verification token
   const token = crypto.randomBytes(32).toString("hex");
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
   const expiry = new Date();
   expiry.setHours(expiry.getHours() + 24); // 24 hours
 
   // Update account with token
-  await prisma.account.update({
-    where: { id: accountId },
+  const account = await prisma.account.update({
+    where: { id: partialAccount.id },
     data: {
-      emailVerificationToken: token,
+      emailVerificationToken: hashedToken,
       emailVerificationExpiry: expiry,
+      emailVerificationLastSentAt: new Date(),
     },
   });
 
   // Send verification email
-  const verificationUrl = `${env.clientUrl}/email-confirmation?token=${token}`;
+  const verificationUrl = `${env.clientUrl}/verify-email?token=${token}`;
 
   await sendEmail({
     to: account.email,
@@ -47,7 +45,7 @@ export const requestEmailVerification = async (accountId: string) => {
     html: `
       <h2>Welcome ${account.firstName}!</h2>
       <p>Please verify your email address by clicking the link below:</p>
-      <a href="${verificationUrl}">${verificationUrl}</a>
+      <a href="${verificationUrl}">Verify Email</a>
       <p>This link expires in 24 hours.</p>
       <p>If you didn't create an account, please ignore this email.</p>
     `,
@@ -60,19 +58,21 @@ export const requestEmailVerification = async (accountId: string) => {
  * Verify email with token
  */
 export const verifyEmail = async (token: string) => {
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+
   const account = await prisma.account.findUnique({
-    where: { emailVerificationToken: token },
+    where: { emailVerificationToken: hashedToken },
   });
 
   if (!account) {
     throw new Error("Invalid verification token");
   }
 
-  // Check if token expired
-  if (
-    account.emailVerificationExpiry &&
-    new Date() > account.emailVerificationExpiry
-  ) {
+  if (!account.emailVerificationToken || !account.emailVerificationExpiry) {
+    throw new Error("Invalid or missing verification token");
+  }
+
+  if (new Date() > account.emailVerificationExpiry) {
     throw new Error("Verification token has expired");
   }
 
@@ -83,6 +83,7 @@ export const verifyEmail = async (token: string) => {
       isEmailVerified: true,
       emailVerificationToken: null,
       emailVerificationExpiry: null,
+      emailVerificationLastSentAt: null,
     },
   });
 
@@ -160,10 +161,7 @@ export const resetPassword = async (token: string, newPassword: string) => {
   }
 
   // Check if token expired
-  if (
-    account.passwordResetExpiry &&
-    new Date() > account.passwordResetExpiry
-  ) {
+  if (account.passwordResetExpiry && new Date() > account.passwordResetExpiry) {
     throw new Error("Reset token has expired");
   }
 
@@ -202,6 +200,21 @@ export const resendVerificationEmail = async (email: string) => {
     throw new Error("Email already verified");
   }
 
+  const now = new Date();
+
+  // Cooldown: 2 minutes
+  if (account.emailVerificationLastSentAt) {
+    const diffMs =
+      now.getTime() - account.emailVerificationLastSentAt.getTime();
+    const diffMinutes = diffMs / (1000 * 60);
+
+    if (diffMinutes < 2) {
+      throw new Error(
+        "Please wait before requesting another verification email.",
+      );
+    }
+  }
+
   // Reuse the requestEmailVerification function
-  return await requestEmailVerification(account.id);
+  return await requestEmailVerification(account);
 };

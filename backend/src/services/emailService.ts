@@ -29,7 +29,7 @@ export const sendEmail = async ({
   }
 
   await transporter.sendMail({
-    from: env.smtp.from,
+    from:`Lifeline <${env.smtp.user}>`,
     to,
     subject,
     html,

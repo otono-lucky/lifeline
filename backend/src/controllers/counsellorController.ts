@@ -173,7 +173,6 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
       lastName,
       phone,
       bio,
-      yearsExperience: yearsExperience ? parseInt(yearsExperience) : undefined,
       role: "Counselor",
     });
 
@@ -201,7 +200,6 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
         counselor: {
           id: result.counselor.id,
           bio: result.counselor.bio,
-          yearsExperience: result.counselor.yearsExperience,
         },
         token,
       }),
@@ -220,7 +218,10 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
  * @access  ChurchAdmin, SuperAdmin
  */
 export const getAllCounselors = async (req: Request, res: Response) => {
-  console.log("[GET /api/counselor/list-all] Starting - Role:", req.account?.role);
+  console.log(
+    "[GET /api/counselor/list-all] Starting - Role:",
+    req.account?.role,
+  );
   try {
     const { status, page, limit } = req.query;
 
@@ -228,7 +229,11 @@ export const getAllCounselors = async (req: Request, res: Response) => {
       console.log("[GET /api/counselor] Failed: Invalid status");
       return res
         .status(400)
-        .json(errorResponse("Invalid status. Must be 'pending, 'active', 'suspended'"));
+        .json(
+          errorResponse(
+            "Invalid status. Must be 'pending, 'active', 'suspended'",
+          ),
+        );
     }
 
     // Only super admin can get all counselors
@@ -352,7 +357,6 @@ export const update = async (req: Request<Params>, res: Response) => {
 
     const counselor = await updateCounselor(id, {
       bio,
-      yearsExperience: yearsExperience ? parseInt(yearsExperience) : undefined,
     });
 
     res.json(successResponse("Counselor updated successfully", { counselor }));

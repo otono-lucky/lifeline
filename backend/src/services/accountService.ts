@@ -132,7 +132,6 @@ export const createCounselor = async (data: CreateCounselorData) => {
         accountId: account.id,
         churchId: data.churchId,
         bio: data.bio,
-        yearsExperience: data.yearsExperience,
       },
     });
 

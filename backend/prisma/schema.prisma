@@ -73,6 +73,7 @@ model Account {
   isEmailVerified         Boolean   @default(false)
   emailVerificationToken  String?   @unique
   emailVerificationExpiry DateTime?
+  emailVerificationLastSentAt DateTime?
 
   // Password reset
   passwordResetToken  String?   @unique
@@ -125,7 +126,6 @@ model Counselor {
   churchId  String @db.Uuid
 
   bio             String?
-  yearsExperience Int?
 
   account       Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   church        Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)

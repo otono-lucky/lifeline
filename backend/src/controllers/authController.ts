@@ -39,7 +39,7 @@ export const signup = async (req: Request, res: Response) => {
       residenceAddress,
       occupation,
       interests,
-      church,
+      churchId,
       matchPreference,
     } = req.body;
 
@@ -79,7 +79,7 @@ export const signup = async (req: Request, res: Response) => {
             residenceAddress,
             occupation,
             interests,
-            church,
+            churchId,
             matchPreference,
           },
         },
@@ -94,17 +94,17 @@ export const signup = async (req: Request, res: Response) => {
     });
 
     // Send verification email
-    await requestEmailVerification(newAccount.id);
+    await requestEmailVerification(newAccount);
 
     // Generate token (user can login but features limited until verified)
-    const token = generateToken(newAccount);
+    // const token = generateToken(newAccount);
     console.log("[POST /api/auth/signup] Success - User:", newAccount.id);
 
     res.status(201).json(
       successResponse(
         "User registered successfully. Please check your email to verify your account.",
         {
-          token,
+          // token,
           user: newAccount,
         },
       ),
