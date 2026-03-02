@@ -18,7 +18,6 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import PasswordConfirmedPage from "./pages/PasswordConfirmedPage";
 import EmailConfirmationPage from "./pages/EmailConfirmationPage";
 import VerifyEmailPage from "./pages/VerifyEmailPage";
-import RequestVerificationPage from "./pages/RequestVerificationPage";
 import SubscriptionPage from "./pages/SubscriptionPage";
 
 // Dashboard pages
@@ -81,10 +80,6 @@ function App() {
               element={<EmailConfirmationPage />}
             />
             <Route path="/verify-email" element={<VerifyEmailPage />} />
-            <Route
-              path="/request-verification"
-              element={<RequestVerificationPage />}
-            />
             <Route path="/subscription" element={<SubscriptionPage />} />
 
             {/* Dashboard Routes */}

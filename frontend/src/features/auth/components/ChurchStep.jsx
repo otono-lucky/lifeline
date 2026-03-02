@@ -1,51 +1,35 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import Input from "../../../components/Input";
-import { churchService } from "../../../api/services";
-
-// Mock API for churches (to be replaced by church onboarding feature later)
+import { usePublicChurchesQuery } from "../../../api/queries/churches";
 
 const ChurchStep = ({ data, onChange, errors = {}, setErrors }) => {
-  const [churches, setChurches] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const { data: churchesResponse, isLoading: loading, isError } =
+    usePublicChurchesQuery();
 
-  const fetchChurches = async () => {
-    try {
-      setLoading(true);
+  const churches = useMemo(() => {
+    if (!churchesResponse?.success) {
+      return [];
+    }
 
-      const res = await churchService.getPublicChurches();
-
-      if (!res.success) {
-        setChurches([]);
-        return;
-      }
-
-      const formattedChurches = res.data?.churches?.map((church) => ({
+    const formattedChurches =
+      churchesResponse.data?.churches?.map((church) => ({
         value: church.id,
         label: church.officialName,
-      }));
+      })) || [];
 
-      const sortedChurches = formattedChurches.sort((a, b) =>
-        a.label.localeCompare(b.label),
-      );
-
-      setChurches(sortedChurches);
-    } catch (error) {
-      console.error("Error fetching churches:", error);
-
-      if (setErrors) {
-        setErrors((prev) => ({
-          ...prev,
-          churchId: "Failed to load churches. Please try again.",
-        }));
-    }
-    } finally {
-      setLoading(false);
-    }
-  };
+    return formattedChurches.sort((a, b) => a.label.localeCompare(b.label));
+  }, [churchesResponse]);
 
   useEffect(() => {
-    fetchChurches().then(() => console.log("Fetched churches"));
-  }, []);
+    if (!isError || !setErrors) {
+      return;
+    }
+
+    setErrors((prev) => ({
+      ...prev,
+      churchId: "Failed to load churches. Please try again.",
+    }));
+  }, [isError, setErrors]);
 
   return (
     <div className="space-y-6">

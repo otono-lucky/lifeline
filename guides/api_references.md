@@ -262,13 +262,12 @@ Query params: `verificationStatus?`, `page?`, `limit?`
   "lastName": "string",
   "phone": "string?",
   "bio": "string?",
-  "yearsExperience": 5
 }
 ```
 
 **PUT /api/counselor/:id**
 ```json
-{ "bio": "string?", "yearsExperience": 5 }
+{ "bio": "string?" }
 ```
 
 **GET /api/counselor/list**

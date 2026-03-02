@@ -1,7 +1,8 @@
-import React, { createContext, useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { authService } from "../api/services";
-
-export const AuthContext = createContext();
+import { queryClient } from "../api/queryClient";
+import { queryKeys } from "../api/queryKeys";
+import { AuthContext } from "./auth-context";
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -14,16 +15,22 @@ export const AuthProvider = ({ children }) => {
       const token = localStorage.getItem("token");
       if (token) {
         try {
-          const response = await authService.getMe();
+          const response = await queryClient.fetchQuery({
+            queryKey: queryKeys.auth.me(),
+            queryFn: authService.getMe,
+            staleTime: 1000 * 60 * 2,
+          });
           if (response.success && response.data.user) {
             setUser(response.data.user);
           } else {
             localStorage.removeItem("token");
             setUser(null);
+            queryClient.removeQueries({ queryKey: queryKeys.auth.me() });
           }
-        } catch (err) {
+        } catch {
           localStorage.removeItem("token");
           setUser(null);
+          queryClient.removeQueries({ queryKey: queryKeys.auth.me() });
         }
       }
       setLoading(false);
@@ -39,6 +46,10 @@ export const AuthProvider = ({ children }) => {
       if (response.success && response.data.token) {
         localStorage.setItem("token", response.data.token);
         setUser(response.data.user);
+        queryClient.setQueryData(queryKeys.auth.me(), {
+          success: true,
+          data: { user: response.data.user },
+        });
         return response.data;
       } else {
         throw new Error(response.message || "Login failed");
@@ -57,6 +68,10 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         // localStorage.setItem("token", response.data.token);
         setUser(response.data.user);
+        queryClient.setQueryData(queryKeys.auth.me(), {
+          success: true,
+          data: { user: response.data.user },
+        });
         return response.data;
       } else {
         throw new Error(response.message || "Signup failed");
@@ -72,6 +87,7 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem("token");
     setUser(null);
     setError(null);
+    queryClient.clear();
   }, []);
 
   const value = {

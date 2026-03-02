@@ -1,13 +1,14 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useAuth } from "../hooks/useAuth";
 import { DashboardLayout } from "../features/dashboard/components/DashboardLayout";
 import { Card, Button, Toast } from "../components";
-import { userService, authService } from "../api/services";
+import {
+  useMyProfileQuery,
+  useUpdateMyProfileMutation,
+} from "../api/queries/users";
 
 const UserDashboard = () => {
   const { user } = useAuth();
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -24,58 +25,50 @@ const UserDashboard = () => {
     matchPreference: "my_church",
   });
 
-  useEffect(() => {
-    fetchProfile();
-  }, []);
+  const { data: profileResponse, isLoading: isProfileLoading, refetch } =
+    useMyProfileQuery();
+  const updateProfileMutation = useUpdateMyProfileMutation();
+  const loading = isProfileLoading || updateProfileMutation.isPending;
+  const profile =
+    profileResponse?.success && profileResponse?.data?.user
+      ? profileResponse.data.user
+      : null;
 
-  const fetchProfile = async () => {
-    setLoading(true);
-    try {
-      const response = await userService.getProfile();
-      if (response.success && response.data.user) {
-        const userData = response.data.user;
-        setProfile(userData);
-        setFormData({
-          originCountry: userData.originCountry || "",
-          originState: userData.originState || "",
-          originLga: userData.originLga || "",
-          residenceCountry: userData.residenceCountry || "",
-          residenceState: userData.residenceState || "",
-          residenceCity: userData.residenceCity || "",
-          residenceAddress: userData.residenceAddress || "",
-          occupation: userData.occupation || "",
-          interests: userData.interests
-            ? JSON.stringify(userData.interests)
-            : "",
-          church: userData.churchId || "",
-          matchPreference: userData.matchPreference || "my_church",
-        });
-      }
-    } catch (error) {
-      setToast({ type: "error", message: "Failed to fetch profile" });
-    } finally {
-      setLoading(false);
+  const populateFormFromProfile = () => {
+    if (!profile) {
+      return;
     }
+
+    setFormData({
+      originCountry: profile.originCountry || "",
+      originState: profile.originState || "",
+      originLga: profile.originLga || "",
+      residenceCountry: profile.residenceCountry || "",
+      residenceState: profile.residenceState || "",
+      residenceCity: profile.residenceCity || "",
+      residenceAddress: profile.residenceAddress || "",
+      occupation: profile.occupation || "",
+      interests: profile.interests ? JSON.stringify(profile.interests) : "",
+      church: profile.churchId || "",
+      matchPreference: profile.matchPreference || "my_church",
+    });
   };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
-    setLoading(true);
     try {
       const updateData = {
         ...formData,
         interests: formData.interests ? JSON.parse(formData.interests) : null,
       };
-      const response = await userService.updateProfile(updateData);
+      const response = await updateProfileMutation.mutateAsync(updateData);
       if (response.success) {
         setToast({ type: "success", message: "Profile updated successfully!" });
         setIsEditing(false);
-        fetchProfile();
+        refetch();
       }
-    } catch (error) {
+    } catch {
       setToast({ type: "error", message: "Failed to update profile" });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -102,7 +95,12 @@ const UserDashboard = () => {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold text-gray-900">My Profile</h1>
           <Button
-            onClick={() => setIsEditing(!isEditing)}
+            onClick={() => {
+              if (!isEditing) {
+                populateFormFromProfile();
+              }
+              setIsEditing(!isEditing);
+            }}
             variant={isEditing ? "secondary" : "primary"}
           >
             {isEditing ? "Cancel" : "Edit Profile"}

@@ -31,7 +31,7 @@ const CounselorDashboard = () => {
     } else if (activeTab === "users") {
       fetchAssignedUsers();
     }
-  }, [activeTab]);
+  }, []);
 
   const fetchDashboard = async () => {
     setLoading(true);

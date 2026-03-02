@@ -32,7 +32,7 @@ const ChurchAdminDashboard = () => {
     } else if (activeTab === "counselors") {
       fetchCounselors();
     }
-  }, [activeTab]);
+  }, []);
 
   const fetchDashboard = async () => {
     setLoading(true);
@@ -143,8 +143,7 @@ const ChurchAdminDashboard = () => {
       render: (_, row) => `${row.account?.firstName} ${row.account?.lastName}`,
     },
     { key: "email", label: "Email", render: (_, row) => row.account?.email },
-    { key: "yearsExperience", label: "Experience" },
-    { key: "bio", label: "Bio" },
+    { key: "yearsExperience", label: "Experience" }
   ];
 
   return (

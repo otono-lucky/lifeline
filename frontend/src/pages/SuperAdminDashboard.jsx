@@ -60,7 +60,7 @@ const SuperAdminDashboard = () => {
     if (activeTab === "overview") {
       fetchDashboard();
     }
-  }, [activeTab]);
+  }, []);
 
   const fetchDashboard = async () => {
     setLoading(true);
