@@ -58,25 +58,22 @@ export const list = async (req: Request, res: Response) => {
 export const getOne = async (req: Request, res: Response) => {
   console.log("[GET /api/users/:id] Starting request - UserId:", req.params);
   try {
-    const id = String(req.params);
+    const accountId = String(req.params.id);
 
     // If regular user, they can only view their own profile
-    if (req.account.role === "User") {
-      const userProfile = await prisma.user.findUnique({
-        where: { accountId: req.account.id },
-      });
-
-      if (!userProfile || userProfile.id !== id) {
+    if (req.account.role === "User" && req.account.id !== accountId) {
         return res
           .status(403)
           .json(errorResponse("You can only view your own profile"));
-      }
     }
 
-    const user = await getUserById(id);
+    const user = await getUserById(accountId);
 
     const responseData = successResponse("User fetched successfully", { user });
-    console.log("[GET /api/users/:id] ✓ Success - UserId:", user.id);
+    console.log(
+      "[GET /api/users/:id] ✓ Success - AccountId:",
+      user.accountId,
+    );
     res.json(responseData);
   } catch (error: any) {
     console.error("[GET /api/users/:id] ✗ Failed:", error.message);
@@ -100,7 +97,7 @@ export const getOne = async (req: Request, res: Response) => {
 export const update = async (req: Request, res: Response) => {
   console.log("[PUT /api/users/:id] Starting - UserId:", req.params);
   try {
-    const id = String(req.params);
+    const accountId = String(req.params.id);
     const {
       originCountry,
       originState,
@@ -116,19 +113,13 @@ export const update = async (req: Request, res: Response) => {
     } = req.body;
 
     // If regular user, they can only update their own profile
-    if (req.account.role === "User") {
-      const userProfile = await prisma.user.findUnique({
-        where: { accountId: req.account.id },
-      });
-
-      if (!userProfile || userProfile.id !== id) {
+    if (req.account.role === "User" && req.account.id !== accountId) {
         return res
           .status(403)
           .json(errorResponse("You can only update your own profile"));
-      }
     }
 
-    const user = await updateUser(id, {
+    const user = await updateUser(accountId, {
       originCountry,
       originState,
       originLga,
@@ -141,7 +132,7 @@ export const update = async (req: Request, res: Response) => {
       churchId,
       matchPreference,
     });
-    console.log("[PUT /api/users/:id] Success - UserId:", user.id);
+    console.log("[PUT /api/users/:id] Success - AccountId:", user.accountId);
 
     res.json(successResponse("User profile updated successfully", { user }));
   } catch (error: any) {
@@ -165,7 +156,7 @@ export const updateVerification = async (req: Request, res: Response) => {
     req.body?.isVerified,
   );
   try {
-    const id = String(req.params);
+    const accountId = String(req.params.id);
     const { isVerified } = req.body;
 
     if (typeof isVerified !== "boolean") {
@@ -174,10 +165,10 @@ export const updateVerification = async (req: Request, res: Response) => {
         .json(errorResponse("isVerified must be a boolean"));
     }
 
-    const user = await updateUserVerification(id, isVerified);
+    const user = await updateUserVerification(accountId, isVerified);
     console.log(
       "[PATCH /api/users/:id/verification] Success - UserId:",
-      user.id,
+      user.accountId,
     );
     res.json(
       successResponse(
@@ -211,7 +202,7 @@ export const updateStatus = async (req: Request, res: Response) => {
     req.body?.status,
   );
   try {
-    const id = String(req.params.id);
+    const accountId = String(req.params.id);
     const { status } = req.body;
 
     if (!["active", "suspended"].includes(status)) {
@@ -220,9 +211,9 @@ export const updateStatus = async (req: Request, res: Response) => {
         .json(errorResponse("Invalid status. Must be: active or suspended"));
     }
 
-    // Get user to find their accountId
+    // Get user by accountId
     const user = await prisma.user.findUnique({
-      where: { id },
+      where: { accountId },
       select: { accountId: true },
     });
 
@@ -235,7 +226,7 @@ export const updateStatus = async (req: Request, res: Response) => {
     const account = await updateAccountStatus(user.accountId, status);
     console.log(
       "[PATCH /api/users/:id/status] Success - UserId:",
-      id,
+      accountId,
       "Status:",
       status,
     );

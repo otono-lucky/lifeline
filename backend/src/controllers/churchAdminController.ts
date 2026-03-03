@@ -8,7 +8,6 @@ import {
   getChurchAdmins,
   getChurchAdminById,
 } from "../services/churchAdminService";
-import { getChurchMembers } from "../services/churchService";
 import { createChurchAdmin } from "../services/accountService";
 import { generateToken } from "../utils/tokenManager";
 import { successResponse, errorResponse } from "../utils/responseHandler";
@@ -25,7 +24,10 @@ export const getDashboard = async (req: Request, res: Response) => {
     req.account?.id,
   );
   try {
-    const dashboard = await getChurchAdminDashboard(req.account.id);
+    const dashboard = await getChurchAdminDashboard(
+      req.account.id,
+      req.params?.id as string | undefined,
+    );
     console.log("[GET /api/church-admin/dashboard] Success");
 
     res.json(successResponse("Dashboard data fetched successfully", dashboard));
@@ -34,44 +36,6 @@ export const getDashboard = async (req: Request, res: Response) => {
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching dashboard"));
-  }
-};
-
-/**
- * @desc    Get church members
- * @route   GET /api/church-admin/me/members
- * @access  ChurchAdmin
- */
-export const getMembers = async (req: Request, res: Response) => {
-  console.log(
-    "[GET /api/church-admin/me/members] getMembers - ChurchAdminId:",
-    req.account?.id,
-  );
-  try {
-    const { verificationStatus, page, limit } = req.query;
-
-    const result = await getChurchMembers(req.account.id, {
-      verificationStatus: verificationStatus as string,
-      page: page ? parseInt(page as string) : undefined,
-      limit: limit ? parseInt(limit as string) : undefined,
-    });
-    console.log(
-      "[GET /api/church-admin/me/members] Success - Count:",
-      result.members.length,
-    );
-
-    res.json(
-      successResponse(
-        "Members fetched successfully",
-        { members: result.members },
-        result.pagination,
-      ),
-    );
-  } catch (error: any) {
-    console.error("[GET /api/church-admin/me/members] Failed:", error.message);
-    res
-      .status(500)
-      .json(errorResponse(error.message || "Server error fetching members"));
   }
 };
 
@@ -178,8 +142,7 @@ export const createChurchAdminAccount = async (req: Request, res: Response) => {
           role: result.account.role,
         },
         churchAdmin: {
-          id: result.churchAdmin.id, // resource ID
-          accountId: result.account.id, // link to account
+          accountId: result.account.id,
           churchId: result.churchAdmin.churchId,
         },
         token,
@@ -250,7 +213,10 @@ export const getChurchAdminDetails = async (
     const { id } = req.params;
 
     const churchAdmin = await getChurchAdminById(id);
-    console.log("[GET /api/church-admins/:id] Success - Id:", churchAdmin.id);
+    console.log(
+      "[GET /api/church-admins/:id] Success - AccountId:",
+      churchAdmin.accountId,
+    );
 
     res.json(
       successResponse("Church admin fetched successfully", { churchAdmin }),

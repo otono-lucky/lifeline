@@ -207,29 +207,9 @@ export const getChurchMembers = async (
   const { churchId, verificationStatus, page = 1, limit = 20 } = options;
   const skip = (page - 1) * limit;
 
-  const requester = await prisma.account.findUnique({
-    where: { id: requesterId },
-    include: { churchAdmin: true, superAdmin: true },
-  });
+  const targetChurchId = await resolveChurchScope(requesterId, churchId);
 
-  if (!requester) throw new Error("Requester not found");
-
-  // Determine which churchId to use
-  let targetChurchId: string;
-  if (requester.churchAdmin) {
-    targetChurchId = requester.churchAdmin.churchId;
-
-    if (churchId && churchId !== targetChurchId) {
-      throw new Error("Church admin can only view their own church members");
-    }
-  } else if (requester.superAdmin) {
-    if (!churchId) throw new Error("SuperAdmin must provide churchId");
-    targetChurchId = churchId;
-  } else {
-    throw new Error("Unauthorized role for viewing members");
-  }
-
-  const where: any = { churchId };
+  const where: any = { churchId: targetChurchId };
   if (verificationStatus) {
     where.verificationStatus = verificationStatus;
   }
@@ -256,6 +236,7 @@ export const getChurchMembers = async (
             id: true,
             account: {
               select: {
+                id: true,
                 firstName: true,
                 lastName: true,
               },
@@ -269,7 +250,7 @@ export const getChurchMembers = async (
 
   return {
     members: members.map((m) => ({
-      id: m.id,
+      accountId: m.accountId,
       firstName: m.account.firstName,
       lastName: m.account.lastName,
       email: m.account.email,
@@ -279,7 +260,7 @@ export const getChurchMembers = async (
       verifiedAt: m.verifiedAt,
       assignedCounselor: m.assignedCounselor
         ? {
-            id: m.assignedCounselor.id,
+            accountId: m.assignedCounselor.account.id,
             name: `${m.assignedCounselor.account.firstName} ${m.assignedCounselor.account.lastName}`,
           }
         : null,
@@ -339,4 +320,38 @@ export const activateChurch = async (churchId: string) => {
   });
 
   return church;
+};
+
+export const resolveChurchScope = async (
+  requesterId: string,
+  requestedChurchId?: string
+): Promise<string> => {
+  const requester = await prisma.account.findUnique({
+    where: { id: requesterId },
+    include: { churchAdmin: true, superAdmin: true },
+  });
+
+  if (!requester) throw new Error("Requester not found");
+
+  // Super admin → must specify which church they want to view
+  if (requester.superAdmin) {
+    if (!requestedChurchId) {
+      throw new Error("Super admin must provide a churchId");
+    }
+    return requestedChurchId;
+  }
+
+  // Church admin → always restricted to their own church
+  if (requester.churchAdmin) {
+    const ownChurchId = requester.churchAdmin.churchId;
+
+    if (requestedChurchId && requestedChurchId !== ownChurchId) {
+      throw new Error("Church admin can only view their own church");
+    }
+
+    return ownChurchId;
+  }
+
+  // No other roles allowed
+  throw new Error("Unauthorized role for church-scoped data");
 };

@@ -11,10 +11,9 @@ import {
 } from "../components";
 import {
   adminService,
-  churchAdminService,
   churchService,
 } from "../api/services";
-import { NavLink, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import CreateCounsellorModal from "../features/dashboard/components/CreateCounsellorModal";
 
 const SuperAdminDashboard = () => {
@@ -31,6 +30,7 @@ const SuperAdminDashboard = () => {
   const [selectedChurch, setSelectedChurch] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [showCreateCounselor, setShowCreateCounselor] = useState(false);
   const activeTab = searchParams.get("tab") || "overview";
 
@@ -208,6 +208,10 @@ const SuperAdminDashboard = () => {
   };
 
   const handleVerifyUser = async (userId, isVerified) => {
+    if (!userId) {
+      setToast({ type: "error", message: "Missing user accountId" });
+      return;
+    }
     try {
       const response = await adminService.verifyUser(userId, isVerified);
       if (response.success) {
@@ -269,24 +273,32 @@ const SuperAdminDashboard = () => {
   ];
 
   const userColumns = [
-    { key: "id", label: "ID", render: (id) => id.substring(0, 8) },
+    {
+      key: "accountId",
+      label: "ID",
+      render: (accountId) => accountId?.substring(0, 8),
+    },
     {
       key: "firstName",
       label: "Name",
-      render: (_, row) => `${row.account?.firstName} ${row.account?.lastName}`,
+      render: (_, row) => `${row.firstName} ${row.lastName}`,
     },
-    { key: "email", label: "Email", render: (_, row) => row.account?.email },
+    { key: "email", label: "Email", render: (_, row) => row.email },
     { key: "verificationStatus", label: "Verification" },
   ];
 
   const adminColumns = [
-    { key: "id", label: "ID", render: (id) => id.substring(0, 8) },
     {
-      key: "account",
-      label: "Name",
-      render: (_, row) => `${row.account?.firstName} ${row.account?.lastName}`,
+      key: "accountId",
+      label: "ID",
+      render: (accountId) => accountId?.substring(0, 8),
     },
-    { key: "email", label: "Email", render: (_, row) => row.account?.email },
+    {
+      key: "firstName",
+      label: "Name",
+      render: (_, row) => `${row.firstName} ${row.lastName}`,
+    },
+    { key: "email", label: "Email", render: (_, row) => row.email },
     {
       key: "church",
       label: "Church",
@@ -295,13 +307,17 @@ const SuperAdminDashboard = () => {
   ];
 
   const counselorColumns = [
-    { key: "id", label: "ID", render: (id) => id.substring(0, 8) },
     {
-      key: "account",
-      label: "Name",
-      render: (_, row) => `${row.account?.firstName} ${row.account?.lastName}`,
+      key: "accountId",
+      label: "ID",
+      render: (accountId) => accountId?.substring(0, 8),
     },
-    { key: "email", label: "Email", render: (_, row) => row.account?.email },
+    {
+      key: "firstName",
+      label: "Name",
+      render: (_, row) => `${row.firstName} ${row.lastName}`,
+    },
+    { key: "email", label: "Email", render: (_, row) => row.email },
     {
       key: "church",
       label: "Church",
@@ -421,7 +437,7 @@ const SuperAdminDashboard = () => {
                 <Button
                   size="sm"
                   variant={row.isVerified ? "secondary" : "success"}
-                  onClick={() => handleVerifyUser(row.id, !row.isVerified)}
+                  onClick={() => handleVerifyUser(row.accountId, !row.isVerified)}
                 >
                   {row.isVerified ? "Unverify" : "Verify"}
                 </Button>
@@ -446,6 +462,17 @@ const SuperAdminDashboard = () => {
               columns={adminColumns}
               data={churchAdmins}
               loading={loading}
+              actions={(row) => (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    navigate(`/dashboard/church-admin/${row.accountId}`)
+                  }
+                >
+                  View Dashboard
+                </Button>
+              )}
             />
           </Card>
         </div>
@@ -466,6 +493,17 @@ const SuperAdminDashboard = () => {
               columns={counselorColumns}
               data={counselors}
               loading={loading}
+              actions={(row) => (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() =>
+                    navigate(`/dashboard/counselor/${row.accountId}`)
+                  }
+                >
+                  View Dashboard
+                </Button>
+              )}
             />
           </Card>
         </div>

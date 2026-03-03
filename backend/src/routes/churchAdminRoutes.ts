@@ -4,7 +4,6 @@
 import express from "express";
 import {
   getDashboard,
-  getMembers,
   assignCounselor,
   createChurchAdminAccount,
   listChurchAdmins,
@@ -14,15 +13,14 @@ import authMiddleware from "../middleware/authMiddleware";
 import {
   requireSuperAdmin,
   requireChurchAdmin,
+  requireAnyAdmin,
 } from "../middleware/requireRole";
 
 const router = express.Router();
 
 // Dashboard
-router.get("/dashboard", authMiddleware, requireChurchAdmin, getDashboard);
-
-// Members
-router.get("/me/members", authMiddleware, requireChurchAdmin, getMembers);
+router.get("/dashboard", authMiddleware, requireAnyAdmin, getDashboard);
+router.get("/:id/dashboard", authMiddleware, requireAnyAdmin, getDashboard);
 
 // Assign counselor
 router.post(

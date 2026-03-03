@@ -25,13 +25,16 @@ import { STATUS_TYPES } from "../constants";
  * @route   GET /api/counselor/dashboard
  * @access  Counselor
  */
-export const getDashboard = async (req: Request, res: Response) => {
+export const getDashboard = async (
+  req: Request<{ id?: string }>,
+  res: Response,
+) => {
   console.log(
     "[CounselorController] getDashboard - CounselorId:",
     req.account?.id,
   );
   try {
-    const dashboard = await getCounselorDashboard(req.account.id);
+    const dashboard = await getCounselorDashboard(req.account.id, req.params.id);
 
     res.json(successResponse("Dashboard data fetched successfully", dashboard));
   } catch (error: any) {
@@ -47,15 +50,19 @@ export const getDashboard = async (req: Request, res: Response) => {
  * @route   GET /api/counselor/assigned-users
  * @access  Counselor
  */
-export const getMyAssignedUsers = async (req: Request, res: Response) => {
+export const getMyAssignedUsers = async (
+  req: Request<{ id?: string }>,
+  res: Response,
+) => {
   console.log(
     "[GET /api/counselor/assigned-users] getMyAssignedUsers - CounselorId:",
     req.account?.id,
   );
   try {
     const { verificationStatus, page, limit } = req.query;
+    const { id } = req.params;
 
-    const result = await getAssignedUsers(req.account.id, {
+    const result = await getAssignedUsers(req.account.id, id, {
       verificationStatus: verificationStatus as string,
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
@@ -198,7 +205,7 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
           role: result.account.role,
         },
         counselor: {
-          id: result.counselor.id,
+          accountId: result.account.id,
           bio: result.counselor.bio,
         },
         token,
@@ -325,10 +332,13 @@ export const list = async (req: Request, res: Response) => {
 export const getOne = async (req: Request<Params>, res: Response) => {
   console.log("[GET /api/counselor/:id] Starting - Id:", req.params?.id);
   try {
-    const { id } = req.params;
+    const { id: accountId } = req.params;
 
-    const counselor = await getCounselorById(id);
-    console.log("[GET /api/counselor/:id] Success - Id:", counselor.id);
+    const counselor = await getCounselorById(accountId);
+    console.log(
+      "[GET /api/counselor/:id] Success - AccountId:",
+      counselor.accountId,
+    );
 
     res.json(successResponse("Counselor fetched successfully", { counselor }));
   } catch (error: any) {
@@ -352,10 +362,10 @@ export const getOne = async (req: Request<Params>, res: Response) => {
 export const update = async (req: Request<Params>, res: Response) => {
   console.log("[PUT /api/counselor/:id] Starting - Id:", req.params?.id);
   try {
-    const { id } = req.params;
-    const { bio, yearsExperience } = req.body;
+    const { id: accountId } = req.params;
+    const { bio } = req.body;
 
-    const counselor = await updateCounselor(id, {
+    const counselor = await updateCounselor(accountId, {
       bio,
     });
 
@@ -381,7 +391,7 @@ export const updateStatus = async (req: Request<Params>, res: Response) => {
     req.body?.status,
   );
   try {
-    const { id } = req.params;
+    const { id: accountId } = req.params;
     const { status } = req.body;
 
     if (!["active", "suspended"].includes(status)) {
@@ -391,10 +401,17 @@ export const updateStatus = async (req: Request<Params>, res: Response) => {
     }
 
     // Get counselor to find their accountId
-    const counselor = await prisma.counselor.findUnique({
-      where: { id },
-      select: { accountId: true },
+    const counselorByAccount = await prisma.counselor.findUnique({
+      where: { accountId },
+      select: { id: true, accountId: true },
     });
+
+    const counselor =
+      counselorByAccount ??
+      (await prisma.counselor.findUnique({
+        where: { id: accountId },
+        select: { id: true, accountId: true },
+      }));
 
     if (!counselor) {
       return res.status(404).json(errorResponse("Counselor not found"));
@@ -404,7 +421,7 @@ export const updateStatus = async (req: Request<Params>, res: Response) => {
     const account = await updateAccountStatus(counselor.accountId, status);
     console.log(
       "[PATCH /api/counselor/:id/status] Success - Id:",
-      id,
+      counselor.id,
       "Status:",
       status,
     );

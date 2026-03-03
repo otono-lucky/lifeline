@@ -31,7 +31,7 @@ router.patch(
 router.get(
   "/:id/members",
   authMiddleware,
-  requireSuperAdmin,
+  requireAnyAdmin,
   ChurchController.getMembers,
 );
 

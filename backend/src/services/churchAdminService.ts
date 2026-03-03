@@ -6,10 +6,17 @@ import { prisma } from "../config/db";
 /**
  * Get church admin dashboard data
  */
-export const getChurchAdminDashboard = async (accountId: string) => {
-  // Get church admin profile
+export const getChurchAdminDashboard = async (
+  requesterAccountId: string,
+  requestedChurchAdminAccountId?: string,
+) => {
+  const scope = await resolveChurchAdminScope(
+    requesterAccountId,
+    requestedChurchAdminAccountId,
+  );
+
   const churchAdmin = await prisma.churchAdmin.findUnique({
-    where: { accountId },
+    where: { accountId: scope.accountId },
     include: {
       church: {
         include: {
@@ -36,13 +43,13 @@ export const getChurchAdminDashboard = async (accountId: string) => {
   // Calculate stats
   const totalMembers = churchAdmin.church.members.length;
   const verifiedMembers = churchAdmin.church.members.filter(
-    (m) => m.verificationStatus === "verified"
+    (m) => m.verificationStatus === "verified",
   ).length;
   const pendingVerification = churchAdmin.church.members.filter(
-    (m) => m.verificationStatus === "pending"
+    (m) => m.verificationStatus === "pending",
   ).length;
   const inProgressVerification = churchAdmin.church.members.filter(
-    (m) => m.verificationStatus === "in_progress"
+    (m) => m.verificationStatus === "in_progress",
   ).length;
   const totalCounselors = churchAdmin.church.counselors.length;
 
@@ -50,7 +57,7 @@ export const getChurchAdminDashboard = async (accountId: string) => {
   const recentMembers = await prisma.user.findMany({
     where: { churchId: churchAdmin.churchId },
     take: 5,
-    orderBy: { account: {createdAt: "desc"} },
+    orderBy: { account: { createdAt: "desc" } },
     include: {
       account: {
         select: {
@@ -91,7 +98,7 @@ export const getChurchAdminDashboard = async (accountId: string) => {
       totalCounselors,
     },
     recentMembers: recentMembers.map((m) => ({
-      id: m.id,
+      accountId: m.accountId,
       firstName: m.account.firstName,
       lastName: m.account.lastName,
       email: m.account.email,
@@ -109,8 +116,8 @@ export const getChurchAdminDashboard = async (accountId: string) => {
  */
 export const assignUserToCounselor = async (
   churchAdminAccountId: string,
-  userId: string,
-  counselorId: string
+  userAccountId: string,
+  counselorAccountId: string,
 ) => {
   // Verify church admin
   const churchAdmin = await prisma.churchAdmin.findUnique({
@@ -123,10 +130,11 @@ export const assignUserToCounselor = async (
   }
 
   // Verify user belongs to this church
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { churchId: true },
+  const userByAccount = await prisma.user.findUnique({
+    where: { accountId: userAccountId },
+    select: { id: true, accountId: true, churchId: true },
   });
+  const user = userByAccount;
 
   if (!user) {
     throw new Error("User not found");
@@ -137,10 +145,11 @@ export const assignUserToCounselor = async (
   }
 
   // Verify counselor belongs to this church
-  const counselor = await prisma.counselor.findUnique({
-    where: { id: counselorId },
-    select: { churchId: true },
+  const counselorByAccount = await prisma.counselor.findUnique({
+    where: { accountId: counselorAccountId },
+    select: { id: true, accountId: true, churchId: true },
   });
+  const counselor = counselorByAccount;
 
   if (!counselor) {
     throw new Error("Counselor not found");
@@ -152,9 +161,9 @@ export const assignUserToCounselor = async (
 
   // Assign user to counselor
   const updatedUser = await prisma.user.update({
-    where: { id: userId },
+    where: { id: user.id },
     data: {
-      assignedCounselorId: counselorId,
+      assignedCounselorId: counselor.id,
       verificationStatus: "in_progress",
     },
     include: {
@@ -178,8 +187,9 @@ export const assignUserToCounselor = async (
   });
 
   return {
-    userId: updatedUser.id,
+    userAccountId: updatedUser.accountId,
     userName: `${updatedUser.account.firstName} ${updatedUser.account.lastName}`,
+    counselorAccountId: counselor.accountId,
     counselorName: `${updatedUser.assignedCounselor!.account.firstName} ${updatedUser.assignedCounselor!.account.lastName}`,
     verificationStatus: updatedUser.verificationStatus,
   };
@@ -206,7 +216,7 @@ export const getChurchAdmins = async (filters?: {
     where.account = { status: filters.status };
   }
 
-  const [churchAdmins, total] = await Promise.all([
+  const [rows, total] = await Promise.all([
     prisma.churchAdmin.findMany({
       where,
       skip,
@@ -240,7 +250,16 @@ export const getChurchAdmins = async (filters?: {
   ]);
 
   return {
-    churchAdmins,
+    churchAdmins: rows.map((r) => ({
+      accountId: r.account.id,
+      firstName: r.account.firstName,
+      lastName: r.account.lastName,
+      email: r.account.email,
+      phone: r.account.phone,
+      accountStatus: r.account.status,
+      createdAt: r.account.createdAt,
+      church: r.church,
+    })),
     pagination: {
       total,
       page,
@@ -253,37 +272,100 @@ export const getChurchAdmins = async (filters?: {
 /**
  * Get single church admin by ID
  */
-export const getChurchAdminById = async (churchAdminId: string) => {
-  const churchAdmin = await prisma.churchAdmin.findUnique({
-    where: { id: churchAdminId },
-    include: {
-      account: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phone: true,
-          status: true,
-          createdAt: true,
+export const getChurchAdminById = async (churchAdminAccountId: string) => {
+  const churchAdmin =
+    (await prisma.churchAdmin.findUnique({
+      where: { accountId: churchAdminAccountId },
+      include: {
+        account: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+            phone: true,
+            status: true,
+            createdAt: true,
+          },
+        },
+        church: {
+          select: {
+            id: true,
+            officialName: true,
+            aka: true,
+            email: true,
+            phone: true,
+            status: true,
+          },
         },
       },
-      church: {
-        select: {
-          id: true,
-          officialName: true,
-          aka: true,
-          email: true,
-          phone: true,
-          status: true,
-        },
-      },
-    },
-  });
+    }))
 
   if (!churchAdmin) {
     throw new Error("Church admin not found");
   }
 
-  return churchAdmin;
+  return {
+    accountId: churchAdmin.account.id,
+    firstName: churchAdmin.account.firstName,
+    lastName: churchAdmin.account.lastName,
+    email: churchAdmin.account.email,
+    phone: churchAdmin.account.phone,
+    accountStatus: churchAdmin.account.status,
+    createdAt: churchAdmin.account.createdAt,
+    church: churchAdmin.church,
+  };
+};
+
+export const resolveChurchAdminScope = async (
+  requesterAccountId: string,
+  requestedChurchAdminAccountId?: string,
+) => {
+  const requester = await prisma.account.findUnique({
+    where: { id: requesterAccountId },
+    include: {
+      superAdmin: true,
+      churchAdmin: true,
+    },
+  });
+
+  if (!requester) {
+    throw new Error("Requester not found");
+  }
+
+  // Super admin → can view any church admin
+  if (requester.superAdmin) {
+    if (!requestedChurchAdminAccountId) {
+      throw new Error("Super admin must provide church admin accountId");
+    }
+
+    const target = await prisma.churchAdmin.findUnique({
+      where: { accountId: requestedChurchAdminAccountId },
+      select: { id: true, accountId: true, churchId: true },
+    });
+
+    if (!target) {
+      throw new Error("Church admin not found");
+    }
+
+    return target;
+  }
+
+  // Church admin → can only view themselves
+  if (requester.churchAdmin) {
+    if (
+      requestedChurchAdminAccountId &&
+      requestedChurchAdminAccountId !== requesterAccountId
+    ) {
+      throw new Error("Church admin can only view their own dashboard");
+    }
+
+    return {
+      id: requester.churchAdmin.id,
+      accountId: requesterAccountId,
+      churchId: requester.churchAdmin.churchId,
+    };
+  }
+
+  throw new Error("Unauthorized role");
 };

@@ -92,17 +92,20 @@ function App() {
               }
             />
             <Route
-              path="/dashboard/church-admin"
+              path="/dashboard/church-admin/:id?"
               element={
-                <ProtectedRoute allowedRoles={["ChurchAdmin"]}>
+                <ProtectedRoute allowedRoles={["ChurchAdmin", "SuperAdmin"]}>
                   <ChurchAdminDashboard />
                 </ProtectedRoute>
               }
             />
+           
             <Route
-              path="/dashboard/counselor"
+              path="/dashboard/counselor/:id?"
               element={
-                <ProtectedRoute allowedRoles={["Counselor"]}>
+                <ProtectedRoute
+                  allowedRoles={["Counselor", "ChurchAdmin", "SuperAdmin"]}
+                >
                   <CounselorDashboard />
                 </ProtectedRoute>
               }

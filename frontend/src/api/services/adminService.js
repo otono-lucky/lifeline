@@ -22,28 +22,30 @@ export const adminService = {
   },
 
   // Get user by ID
-  getUser: async (id) => {
-    const response = await apiClient.get(`/users/${id}`);
+  getUser: async (accountId) => {
+    const response = await apiClient.get(`/users/${accountId}`);
     return response.data;
   },
 
   // Update user
-  updateUser: async (id, data) => {
-    const response = await apiClient.put(`/users/${id}`, data);
+  updateUser: async (accountId, data) => {
+    const response = await apiClient.put(`/users/${accountId}`, data);
     return response.data;
   },
 
   // Verify/unverify user
-  verifyUser: async (id, isVerified) => {
-    const response = await apiClient.patch(`/users/${id}/verification`, {
+  verifyUser: async (accountId, isVerified) => {
+    const response = await apiClient.patch(`/users/${accountId}/verification`, {
       isVerified,
     });
     return response.data;
   },
 
   // Suspend/activate user
-  updateUserStatus: async (id, status) => {
-    const response = await apiClient.patch(`/users/${id}/status`, { status });
+  updateUserStatus: async (accountId, status) => {
+    const response = await apiClient.patch(`/users/${accountId}/status`, {
+      status,
+    });
     return response.data;
   },
 
@@ -59,15 +61,15 @@ export const adminService = {
     return response.data;
   },
 
-  // Get church admin by ID
-  getChurchAdmin: async (id) => {
-    const response = await apiClient.get(`/church-admin/${id}`);
+  // Get church admin by account ID
+  getChurchAdmin: async (accountId) => {
+    const response = await apiClient.get(`/church-admin/${accountId}`);
     return response.data;
   },
 
-  // Get church admin by ID
-  getCounsellor: async (id) => {
-    const response = await apiClient.get(`/counselor/${id}`);
+  // Get counselor by account ID
+  getCounsellor: async (accountId) => {
+    const response = await apiClient.get(`/counselor/${accountId}`);
     return response.data;
   },
   // Get all church admins

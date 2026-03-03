@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { DashboardLayout } from "../features/dashboard/components/DashboardLayout";
 import { Card, StatCard, Table, Button, Modal, Toast } from "../components";
-import { churchAdminService } from "../api/services";
-import { useSearchParams } from "react-router-dom";
+import { churchAdminService, churchService } from "../api/services";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 import CreateCounsellorModal from "../features/dashboard/components/CreateCounsellorModal";
 
 const ChurchAdminDashboard = () => {
+  const { user } = useAuth();
+  const { id: viewedChurchAdminAccountId } = useParams();
+  const navigate = useNavigate();
   // const [activeTab, setActiveTab] = useState("dashboard");
   const [dashboard, setDashboard] = useState(null);
   const [members, setMembers] = useState([]);
@@ -14,9 +18,10 @@ const ChurchAdminDashboard = () => {
   const [toast, setToast] = useState(null);
   const [showCreateCounselor, setShowCreateCounselor] = useState(false);
   const [showAssignUser, setShowAssignUser] = useState(false);
-  const [selectedUser, setSelectedUser] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = searchParams.get("tab") || "overview";
+  const isHigherRoleViewer =
+    Boolean(viewedChurchAdminAccountId) && user?.role !== "ChurchAdmin";
 
   const [assignForm, setAssignForm] = useState({
     userId: "",
@@ -32,30 +37,46 @@ const ChurchAdminDashboard = () => {
     } else if (activeTab === "counselors") {
       fetchCounselors();
     }
-  }, []);
+  }, [activeTab, viewedChurchAdminAccountId]);
 
   const fetchDashboard = async () => {
     setLoading(true);
     try {
-      const response = await churchAdminService.getDashboard();
+      const response = await churchAdminService.getDashboard(
+        viewedChurchAdminAccountId,
+      );
       if (response.success) {
         setDashboard(response.data);
+        return response.data;
       }
-    } catch (error) {
+    } catch {
       setToast({ type: "error", message: "Failed to fetch dashboard" });
+      return null;
     } finally {
       setLoading(false);
     }
   };
 
   const fetchMembers = async () => {
+    let churchId = dashboard?.church?.id;
+
+    if (!churchId) {
+      const dashboardData = await fetchDashboard();
+      churchId = dashboardData?.church?.id;
+    }
+
+    if (!churchId) {
+      setToast({ type: "error", message: "Church context not loaded yet" });
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await churchAdminService.getMembers();
+      const response = await churchService.getChurchMembers(churchId);
       if (response.success) {
         setMembers(response.data.members || []);
       }
-    } catch (error) {
+    } catch {
       setToast({ type: "error", message: "Failed to fetch members" });
     } finally {
       setLoading(false);
@@ -63,13 +84,25 @@ const ChurchAdminDashboard = () => {
   };
 
   const fetchCounselors = async () => {
+    let churchId = dashboard?.church?.id;
+
+    if (!churchId) {
+      const dashboardData = await fetchDashboard();
+      churchId = dashboardData?.church?.id;
+    }
+
+    if (!churchId) {
+      setToast({ type: "error", message: "Church context not loaded yet" });
+      return;
+    }
+
     setLoading(true);
     try {
-      const response = await churchAdminService.getCounselors();
+      const response = await churchAdminService.getCounselors({ churchId });
       if (response.success) {
         setCounselors(response.data.counselors || []);
       }
-    } catch (error) {
+    } catch {
       setToast({ type: "error", message: "Failed to fetch counselors" });
     } finally {
       setLoading(false);
@@ -91,7 +124,7 @@ const ChurchAdminDashboard = () => {
         setShowAssignUser(false);
         fetchMembers();
       }
-    } catch (error) {
+    } catch {
       setToast({ type: "error", message: "Failed to assign user" });
     } finally {
       setLoading(false);
@@ -121,28 +154,33 @@ const ChurchAdminDashboard = () => {
   );
 
   const memberColumns = [
-    { key: "id", label: "ID", render: (id) => id.substring(0, 8) },
+    {
+      key: "accountId",
+      label: "ID",
+      render: (accountId) => accountId?.substring(0, 8),
+    },
     { key: "firstName", label: "Name" },
     { key: "email", label: "Email" },
     { key: "verificationStatus", label: "Status" },
     {
       key: "assignedCounselor",
       label: "Assigned To",
-      render: (_, row) =>
-        row.assignedCounselor?.id
-          ? `${row.assignedCounselor.account?.firstName} ${row.assignedCounselor.account?.lastName}`
-          : "Unassigned",
+      render: (_, row) => row.assignedCounselor?.name || "Unassigned",
     },
   ];
 
   const counselorColumns = [
-    { key: "id", label: "ID", render: (id) => id.substring(0, 8) },
     {
-      key: "account",
-      label: "Name",
-      render: (_, row) => `${row.account?.firstName} ${row.account?.lastName}`,
+      key: "accountId",
+      label: "ID",
+      render: (accountId) => accountId?.substring(0, 8),
     },
-    { key: "email", label: "Email", render: (_, row) => row.account?.email },
+    {
+      key: "firstName",
+      label: "Name",
+      render: (_, row) => `${row.firstName} ${row.lastName}`,
+    },
+    { key: "email", label: "Email", render: (_, row) => row.email },
     { key: "yearsExperience", label: "Experience" }
   ];
 
@@ -152,7 +190,9 @@ const ChurchAdminDashboard = () => {
       {activeTab === "overview" && dashboard && (
         <div className="space-y-6">
           <h1 className="text-3xl font-bold text-gray-900">
-            {dashboard.church?.name} Dashboard
+            {isHigherRoleViewer
+              ? `Viewing Church Admin Dashboard (${dashboard.church?.name})`
+              : `${dashboard.church?.name} Dashboard`}
           </h1>
 
           {/* Church Info */}
@@ -236,8 +276,7 @@ const ChurchAdminDashboard = () => {
                   size="sm"
                   variant="outline"
                   onClick={() => {
-                    setSelectedUser(row.id);
-                    setAssignForm({ ...assignForm, userId: row.id });
+                    setAssignForm({ ...assignForm, userId: row.accountId });
                     setShowAssignUser(true);
                   }}
                 >
@@ -264,6 +303,15 @@ const ChurchAdminDashboard = () => {
               columns={counselorColumns}
               data={counselors}
               loading={loading}
+              actions={(row) => (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => navigate(`/dashboard/counselor/${row.accountId}`)}
+                >
+                  View Dashboard
+                </Button>
+              )}
             />
           </Card>
         </div>
@@ -309,7 +357,7 @@ const ChurchAdminDashboard = () => {
           >
             <option value="">Select Member</option>
             {members.map((member) => (
-              <option key={member.id} value={member.id}>
+              <option key={member.accountId} value={member.accountId}>
                 {member.firstName} {member.lastName} ({member.email})
               </option>
             ))}
@@ -324,8 +372,8 @@ const ChurchAdminDashboard = () => {
           >
             <option value="">Select Counselor</option>
             {counselors.map((counselor) => (
-              <option key={counselor.id} value={counselor.id}>
-                {counselor.account?.firstName} {counselor.account?.lastName}
+              <option key={counselor.accountId} value={counselor.accountId}>
+                {counselor.firstName} {counselor.lastName}
               </option>
             ))}
           </select>

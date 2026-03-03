@@ -13,15 +13,15 @@ export const userService = {
     return response.data;
   },
 
-  // Get user by ID (if allowed)
-  getUser: async (id) => {
-    const response = await apiClient.get(`/users/${id}`);
+  // Get user by account ID (if allowed)
+  getUser: async (accountId) => {
+    const response = await apiClient.get(`/users/${accountId}`);
     return response.data;
   },
 
-  // Update user by ID
-  updateUser: async (id, data) => {
-    const response = await apiClient.put(`/users/${id}`, data);
+  // Update user by account ID
+  updateUser: async (accountId, data) => {
+    const response = await apiClient.put(`/users/${accountId}`, data);
     return response.data;
   },
 };

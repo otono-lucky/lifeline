@@ -10,8 +10,12 @@ import {
   ConfirmModal,
 } from "../components";
 import { counselorService } from "../api/services";
+import { useParams } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
 
 const CounselorDashboard = () => {
+  const { user } = useAuth();
+  const { id: viewedCounselorAccountId } = useParams();
   const [activeTab, setActiveTab] = useState("dashboard");
   const [dashboard, setDashboard] = useState(null);
   const [assignedUsers, setAssignedUsers] = useState([]);
@@ -23,6 +27,8 @@ const CounselorDashboard = () => {
     status: "verified",
     notes: "",
   });
+  const isHigherRoleViewer =
+    Boolean(viewedCounselorAccountId) && user?.role !== "Counselor";
 
   // Fetch dashboard data
   useEffect(() => {
@@ -31,16 +37,17 @@ const CounselorDashboard = () => {
     } else if (activeTab === "users") {
       fetchAssignedUsers();
     }
-  }, []);
+  }, [activeTab, viewedCounselorAccountId]);
 
   const fetchDashboard = async () => {
     setLoading(true);
     try {
-      const response = await counselorService.getDashboard();
+      const response =
+        await counselorService.getDashboard(viewedCounselorAccountId);
       if (response.success) {
         setDashboard(response.data);
       }
-    } catch (error) {
+    } catch {
       setToast({ type: "error", message: "Failed to fetch dashboard" });
     } finally {
       setLoading(false);
@@ -50,11 +57,14 @@ const CounselorDashboard = () => {
   const fetchAssignedUsers = async () => {
     setLoading(true);
     try {
-      const response = await counselorService.getAssignedUsers();
+      const response = await counselorService.getAssignedUsers(
+        {},
+        viewedCounselorAccountId,
+      );
       if (response.success) {
         setAssignedUsers(response.data.users || []);
       }
-    } catch (error) {
+    } catch {
       setToast({ type: "error", message: "Failed to fetch assigned users" });
     } finally {
       setLoading(false);
@@ -66,7 +76,7 @@ const CounselorDashboard = () => {
     setLoading(true);
     try {
       const response = await counselorService.verifyUser(
-        selectedUser.id,
+        selectedUser.accountId,
         verifyForm.status,
         verifyForm.notes,
       );
@@ -80,7 +90,7 @@ const CounselorDashboard = () => {
         fetchAssignedUsers();
         fetchDashboard();
       }
-    } catch (error) {
+    } catch {
       setToast({ type: "error", message: "Failed to verify user" });
     } finally {
       setLoading(false);
@@ -109,7 +119,11 @@ const CounselorDashboard = () => {
   );
 
   const userColumns = [
-    { key: "id", label: "ID", render: (id) => id.substring(0, 8) },
+    {
+      key: "accountId",
+      label: "ID",
+      render: (accountId) => accountId?.substring(0, 8),
+    },
     {
       key: "firstName",
       label: "Name",
@@ -125,23 +139,15 @@ const CounselorDashboard = () => {
     },
   ];
 
-  const getStatusColor = (status) => {
-    const colors = {
-      pending: "bg-yellow-50 text-yellow-700",
-      in_progress: "bg-blue-50 text-blue-700",
-      verified: "bg-green-50 text-green-700",
-      rejected: "bg-red-50 text-red-700",
-    };
-    return colors[status] || "bg-gray-50 text-gray-700";
-  };
-
   return (
     <DashboardLayout sidebar={sidebar}>
       {/* Dashboard View */}
       {activeTab === "dashboard" && dashboard && (
         <div className="space-y-6">
           <h1 className="text-3xl font-bold text-gray-900">
-            Counselor Dashboard
+            {isHigherRoleViewer
+              ? "Viewing Counselor Dashboard"
+              : "Counselor Dashboard"}
           </h1>
 
           {/* Stats */}

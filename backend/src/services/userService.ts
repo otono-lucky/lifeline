@@ -37,7 +37,7 @@ export const getUsers = async (filters?: {
     where.subscriptionTier = filters.subscriptionTier;
   }
 
-  const [users, total] = await Promise.all([
+  const [rows, total] = await Promise.all([
     prisma.user.findMany({
       where,
       skip,
@@ -67,6 +67,7 @@ export const getUsers = async (filters?: {
             id: true,
             account: {
               select: {
+                id: true,
                 firstName: true,
                 lastName: true,
               },
@@ -79,7 +80,29 @@ export const getUsers = async (filters?: {
   ]);
 
   return {
-    users,
+    users: rows.map((u) => ({
+      accountId: u.account.id,
+      firstName: u.account.firstName,
+      lastName: u.account.lastName,
+      email: u.account.email,
+      phone: u.account.phone,
+      accountStatus: u.account.status,
+      createdAt: u.account.createdAt,
+      isVerified: u.isVerified,
+      verificationStatus: u.verificationStatus,
+      verificationNotes: u.verificationNotes,
+      verifiedAt: u.verifiedAt,
+      subscriptionTier: u.subscriptionTier,
+      subscriptionStatus: u.subscriptionStatus,
+      church: u.church,
+      assignedCounselor: u.assignedCounselor
+        ? {
+            accountId: u.assignedCounselor.account.id,
+            firstName: u.assignedCounselor.account.firstName,
+            lastName: u.assignedCounselor.account.lastName,
+          }
+        : null,
+    })),
     pagination: {
       total,
       page,
@@ -90,11 +113,11 @@ export const getUsers = async (filters?: {
 };
 
 /**
- * Get single user by ID
+ * Get single user by account ID
  */
-export const getUserById = async (userId: string) => {
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+export const getUserById = async (accountId: string) => {
+  const row = await prisma.user.findUnique({
+    where: { accountId },
     include: {
       account: {
         select: {
@@ -117,11 +140,12 @@ export const getUserById = async (userId: string) => {
       assignedCounselor: {
         select: {
           id: true,
-          account: {
-            select: {
-              firstName: true,
-              lastName: true,
-              email: true,
+            account: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                email: true,
             },
           },
         },
@@ -129,11 +153,44 @@ export const getUserById = async (userId: string) => {
     },
   });
 
-  if (!user) {
+  if (!row) {
     throw new Error("User not found");
   }
 
-  return user;
+  return {
+    accountId: row.account.id,
+    firstName: row.account.firstName,
+    lastName: row.account.lastName,
+    email: row.account.email,
+    phone: row.account.phone,
+    accountStatus: row.account.status,
+    createdAt: row.account.createdAt,
+    isVerified: row.isVerified,
+    verificationStatus: row.verificationStatus,
+    verificationNotes: row.verificationNotes,
+    verifiedAt: row.verifiedAt,
+    subscriptionTier: row.subscriptionTier,
+    subscriptionStatus: row.subscriptionStatus,
+    originCountry: row.originCountry,
+    originState: row.originState,
+    originLga: row.originLga,
+    residenceCountry: row.residenceCountry,
+    residenceState: row.residenceState,
+    residenceCity: row.residenceCity,
+    residenceAddress: row.residenceAddress,
+    occupation: row.occupation,
+    interests: row.interests,
+    matchPreference: row.matchPreference,
+    church: row.church,
+    assignedCounselor: row.assignedCounselor
+      ? {
+          accountId: row.assignedCounselor.account.id,
+          firstName: row.assignedCounselor.account.firstName,
+          lastName: row.assignedCounselor.account.lastName,
+          email: row.assignedCounselor.account.email,
+        }
+      : null,
+  };
 };
 
 /**
@@ -155,8 +212,10 @@ export const updateUser = async (
     matchPreference?: MatchPreferenceType;
   }
 ) => {
+  const resolvedUser = await resolveUserByIdentifier(userId);
+
   const user = await prisma.user.update({
-    where: { id: userId },
+    where: { id: resolvedUser.id },
     data,
   });
 
@@ -170,8 +229,10 @@ export const updateUserVerification = async (
   userId: string,
   isVerified: boolean
 ) => {
+  const resolvedUser = await resolveUserByIdentifier(userId);
+
   const user = await prisma.user.update({
-    where: { id: userId },
+    where: { id: resolvedUser.id },
     data: { 
       isVerified,
       verificationStatus: isVerified ? "verified" : "pending",
@@ -180,4 +241,17 @@ export const updateUserVerification = async (
   });
 
   return user;
+};
+
+const resolveUserByIdentifier = async (identifier: string) => {
+  const userByAccount = await prisma.user.findUnique({
+    where: { accountId: identifier },
+    select: { id: true },
+  });
+
+  if (!userByAccount) {
+    throw new Error("User not found");
+  }
+
+  return userByAccount;
 };

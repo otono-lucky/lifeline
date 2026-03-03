@@ -2,37 +2,46 @@ import apiClient from "../apiClient";
 
 export const counselorService = {
   // Get counselor dashboard
-  getDashboard: async () => {
-    const response = await apiClient.get("/counselor/dashboard");
+  getDashboard: async (accountId = null) => {
+    const endpoint = accountId
+      ? `/counselor/${accountId}/dashboard`
+      : "/counselor/dashboard";
+    const response = await apiClient.get(endpoint);
     return response.data;
   },
 
   // Get assigned users
-  getAssignedUsers: async (params = {}) => {
-    const response = await apiClient.get("/counselor/assigned-users", {
+  getAssignedUsers: async (params = {}, accountId = null) => {
+    const endpoint = accountId
+      ? `/counselor/${accountId}/assigned-users`
+      : "/counselor/assigned-users";
+    const response = await apiClient.get(endpoint, {
       params,
     });
     return response.data;
   },
 
   // Verify/reject user
-  verifyUser: async (userId, status, notes = "") => {
-    const response = await apiClient.post(`/counselor/verify-user/${userId}`, {
-      status,
-      notes,
-    });
+  verifyUser: async (userAccountId, status, notes = "") => {
+    const response = await apiClient.post(
+      `/counselor/verify-user/${userAccountId}`,
+      {
+        status,
+        notes,
+      },
+    );
     return response.data;
   },
 
-  // Get own profile
-  getProfile: async (id) => {
-    const response = await apiClient.get(`/counselor/${id}`);
+  // Get profile by account ID
+  getProfile: async (accountId) => {
+    const response = await apiClient.get(`/counselor/${accountId}`);
     return response.data;
   },
 
-  // Update own profile
-  updateProfile: async (id, data) => {
-    const response = await apiClient.put(`/counselor/${id}`, data);
+  // Update profile by account ID
+  updateProfile: async (accountId, data) => {
+    const response = await apiClient.put(`/counselor/${accountId}`, data);
     return response.data;
   },
 };

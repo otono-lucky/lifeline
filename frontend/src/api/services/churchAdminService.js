@@ -2,16 +2,11 @@ import apiClient from "../apiClient";
 
 export const churchAdminService = {
   // Get church admin dashboard
-  getDashboard: async () => {
-    const response = await apiClient.get("/church-admin/dashboard");
-    return response.data;
-  },
-
-  // Get church members
-  getMembers: async (params = {}) => {
-    const response = await apiClient.get("/church-admin/me/members", {
-      params,
-    });
+  getDashboard: async (accountId = null) => {
+    const endpoint = accountId
+      ? `/church-admin/${accountId}/dashboard`
+      : "/church-admin/dashboard";
+    const response = await apiClient.get(endpoint);
     return response.data;
   },
 
@@ -36,21 +31,21 @@ export const churchAdminService = {
     return response.data;
   },
 
-  // Get counselor by ID
-  getCounselor: async (id) => {
-    const response = await apiClient.get(`/counselor/${id}`);
+  // Get counselor by account ID
+  getCounselor: async (accountId) => {
+    const response = await apiClient.get(`/counselor/${accountId}`);
     return response.data;
   },
 
   // Update counselor
-  updateCounselor: async (id, data) => {
-    const response = await apiClient.put(`/counselor/${id}`, data);
+  updateCounselor: async (accountId, data) => {
+    const response = await apiClient.put(`/counselor/${accountId}`, data);
     return response.data;
   },
 
   // Update counselor status
-  updateCounselorStatus: async (id, status) => {
-    const response = await apiClient.patch(`/counselor/${id}/status`, {
+  updateCounselorStatus: async (accountId, status) => {
+    const response = await apiClient.patch(`/counselor/${accountId}/status`, {
       status,
     });
     return response.data;

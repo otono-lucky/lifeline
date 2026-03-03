@@ -16,13 +16,13 @@ export const ProtectedRoute = ({ children, allowedRoles = null }) => {
     );
   }
 
-  // if (!isAuthenticated) {
-  //   return <Navigate to="/login" replace />;
-  // }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
 
-  // if (allowedRoles && !allowedRoles.includes(user?.role)) {
-  //   return <Navigate to="/login" replace />;
-  // }
+  if (allowedRoles && !allowedRoles.includes(user?.role)) {
+    return <Navigate to="/" replace />;
+  }
 
   return children;
 };

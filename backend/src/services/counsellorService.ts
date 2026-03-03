@@ -7,10 +7,17 @@ import { prisma } from "../config/db";
 /**
  * Get counselor dashboard data
  */
-export const getCounselorDashboard = async (accountId: string) => {
+export const getCounselorDashboard = async (
+  requesterAccountId: string,
+  requestedCounsellorAccountId?: string,
+) => {
   // Get counselor profile
+  const counselorId = await resolveCounsellorScope(
+    requesterAccountId,
+    requestedCounsellorAccountId,
+  );
   const counselor = await prisma.counselor.findUnique({
-    where: { accountId },
+    where: { id: counselorId },
     include: {
       assignedUsers: {
         include: {
@@ -56,7 +63,7 @@ export const getCounselorDashboard = async (accountId: string) => {
       rejected,
     },
     assignedUsers: counselor.assignedUsers.map((u) => ({
-      id: u.id,
+      accountId: u.accountId,
       firstName: u.account.firstName,
       lastName: u.account.lastName,
       email: u.account.email,
@@ -73,6 +80,7 @@ export const getCounselorDashboard = async (accountId: string) => {
  */
 export const getAssignedUsers = async (
   accountId: string,
+  requestedCounsellorAccountId?: string,
   filters?: {
     verificationStatus?: string;
     page?: number;
@@ -80,20 +88,16 @@ export const getAssignedUsers = async (
   },
 ) => {
   // Get counselor
-  const counselor = await prisma.counselor.findUnique({
-    where: { accountId },
-    select: { id: true },
-  });
-
-  if (!counselor) {
-    throw new Error("Counselor profile not found");
-  }
-
+  const counselorId = await resolveCounsellorScope(
+    accountId,
+    requestedCounsellorAccountId,
+  );
+  
   const page = filters?.page || 1;
   const limit = filters?.limit || 20;
   const skip = (page - 1) * limit;
 
-  const where: any = { assignedCounselorId: counselor.id };
+  const where: any = { assignedCounselorId: counselorId };
 
   if (filters?.verificationStatus) {
     where.verificationStatus = filters.verificationStatus;
@@ -122,7 +126,7 @@ export const getAssignedUsers = async (
 
   return {
     users: users.map((u) => ({
-      id: u.id,
+      accountId: u.accountId,
       firstName: u.account.firstName,
       lastName: u.account.lastName,
       email: u.account.email,
@@ -150,7 +154,7 @@ export const getAssignedUsers = async (
  */
 export const verifyUser = async (
   counselorAccountId: string,
-  userId: string,
+  userIdentifier: string,
   status: "verified" | "rejected",
   notes?: string,
 ) => {
@@ -165,10 +169,7 @@ export const verifyUser = async (
   }
 
   // Verify user is assigned to this counselor
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { assignedCounselorId: true },
-  });
+  const user = await resolveUserByIdentifier(userIdentifier);
 
   if (!user) {
     throw new Error("User not found");
@@ -180,7 +181,7 @@ export const verifyUser = async (
 
   // Update user verification
   const updatedUser = await prisma.user.update({
-    where: { id: userId },
+    where: { id: user.id },
     data: {
       verificationStatus: status,
       verificationNotes: notes,
@@ -199,7 +200,7 @@ export const verifyUser = async (
   });
 
   return {
-    userId: updatedUser.id,
+    accountId: updatedUser.accountId,
     userName: `${updatedUser.account.firstName} ${updatedUser.account.lastName}`,
     email: updatedUser.account.email,
     verificationStatus: updatedUser.verificationStatus,
@@ -208,10 +209,169 @@ export const verifyUser = async (
 };
 
 /**
+ * Get single counselor by account ID
+ */
+export const getCounselorById = async (counselorAccountId: string) => {
+  const counselor = await prisma.counselor.findUnique({
+    where: { accountId: counselorAccountId },
+    include: {
+      account: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          status: true,
+        },
+      },
+      church: {
+        select: {
+          id: true,
+          officialName: true,
+          aka: true,
+        },
+      },
+    },
+  });
+
+  if (!counselor) {
+    throw new Error("Counselor not found");
+  }
+
+  return {
+    accountId: counselor.account.id,
+    firstName: counselor.account.firstName,
+    lastName: counselor.account.lastName,
+    email: counselor.account.email,
+    phone: counselor.account.phone,
+    accountStatus: counselor.account.status,
+    bio: counselor.bio,
+    church: counselor.church,
+  };
+};
+
+/**
+ * Update counselor details
+ */
+export const updateCounselor = async (
+  counselorAccountId: string,
+  data: {
+    bio?: string;
+  },
+) => {
+  const counselor = await prisma.counselor.update({
+    where: { accountId: counselorAccountId },
+    data: {
+      bio: data.bio,
+    },
+    include: {
+      account: {
+        select: {
+          id: true,
+          firstName: true,
+          lastName: true,
+          email: true,
+          phone: true,
+          status: true,
+        },
+      },
+    },
+  });
+
+  return {
+    accountId: counselor.account.id,
+    firstName: counselor.account.firstName,
+    lastName: counselor.account.lastName,
+    email: counselor.account.email,
+    phone: counselor.account.phone,
+    accountStatus: counselor.account.status,
+    bio: counselor.bio,
+  };
+};
+
+export const resolveCounsellorScope = async (
+  requesterId: string,
+  requestedCounsellorAccountId?: string,
+): Promise<string> => {
+  const requester = await prisma.account.findUnique({
+    where: { id: requesterId },
+    include: { counselor: true, churchAdmin: true, superAdmin: true },
+  });
+
+  if (!requester) throw new Error("Requester not found");
+
+  // Super admin → can view any counsellor
+  if (requester.superAdmin) {
+    if (!requestedCounsellorAccountId) {
+      throw new Error("Super admin must provide counselor accountId");
+    }
+    const counselor = await prisma.counselor.findUnique({
+      where: { accountId: requestedCounsellorAccountId },
+      select: { id: true },
+    });
+    if (!counselor) {
+      throw new Error("Counselor not found");
+    }
+    return counselor.id;
+  }
+
+  // Church admin → can view counsellors in their church
+  if (requester.churchAdmin) {
+    if (!requestedCounsellorAccountId) {
+      throw new Error("Church admin must provide counselor accountId");
+    }
+
+    const counselor = await prisma.counselor.findUnique({
+      where: { accountId: requestedCounsellorAccountId },
+      select: { id: true, churchId: true },
+    });
+
+    if (!counselor || counselor.churchId !== requester.churchAdmin.churchId) {
+      throw new Error("Church admin can only view counselors in their church");
+    }
+
+    return counselor.id;
+  }
+
+  // Counsellor → can only view themselves
+  if (requester.counselor) {
+    const ownId = requester.counselor.id;
+
+    if (requestedCounsellorAccountId) {
+      const requestedCounselor = await prisma.counselor.findUnique({
+        where: { accountId: requestedCounsellorAccountId },
+        select: { id: true },
+      });
+      if (!requestedCounselor || requestedCounselor.id !== ownId) {
+        throw new Error("Counselor can only view their own data");
+      }
+    }
+
+    return ownId;
+  }
+
+  throw new Error("Unauthorized role");
+};
+
+const resolveUserByIdentifier = async (userIdentifier: string) => {
+  const userByAccount = await prisma.user.findUnique({
+    where: { accountId: userIdentifier },
+    select: { id: true, accountId: true, assignedCounselorId: true },
+  });
+
+  if (!userByAccount) {
+    throw new Error("User not found");
+  }
+
+  return userByAccount;
+};
+
+/**
  * Get counselors by church
  */
 export const getCounselorsByChurch = async (churchId: string) => {
-  const counselors = await prisma.counselor.findMany({
+  const rows = await prisma.counselor.findMany({
     where: { churchId },
     include: {
       account: {
@@ -239,7 +399,17 @@ export const getCounselorsByChurch = async (churchId: string) => {
     orderBy: { account: { createdAt: "desc" } },
   });
 
-  return counselors;
+  return rows.map((c) => ({
+    accountId: c.account.id,
+    firstName: c.account.firstName,
+    lastName: c.account.lastName,
+    email: c.account.email,
+    phone: c.account.phone,
+    accountStatus: c.account.status,
+    createdAt: c.account.createdAt,
+    bio: c.bio,
+    church: c.church,
+  }));
 };
 
 export const getCounselors = async (filter: {
@@ -251,7 +421,7 @@ export const getCounselors = async (filter: {
   const page = filter.page ?? 1;
   const limit = filter.limit ?? 10;
 
-  const counselors = await prisma.counselor.findMany({
+  const rows = await prisma.counselor.findMany({
     where: {
       account: {
         ...(status && { status }),
@@ -285,58 +455,15 @@ export const getCounselors = async (filter: {
     orderBy: { account: { createdAt: "desc" } },
   });
 
-  return counselors;
-};
-
-/**
- * Get single counselor by ID
- */
-export const getCounselorById = async (counselorId: string) => {
-  const counselor = await prisma.counselor.findUnique({
-    where: { id: counselorId },
-    include: {
-      account: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          email: true,
-          phone: true,
-          status: true,
-        },
-      },
-      church: {
-        select: {
-          id: true,
-          officialName: true,
-          aka: true,
-        },
-      },
-    },
-  });
-
-  if (!counselor) {
-    throw new Error("Counselor not found");
-  }
-
-  return counselor;
-};
-
-/**
- * Update counselor details
- */
-export const updateCounselor = async (
-  counselorId: string,
-  data: {
-    bio?: string;
-  },
-) => {
-  const counselor = await prisma.counselor.update({
-    where: { id: counselorId },
-    data: {
-      bio: data.bio,
-    },
-  });
-
-  return counselor;
+  return rows.map((c) => ({
+    accountId: c.account.id,
+    firstName: c.account.firstName,
+    lastName: c.account.lastName,
+    email: c.account.email,
+    phone: c.account.phone,
+    accountStatus: c.account.status,
+    createdAt: c.account.createdAt,
+    bio: c.bio,
+    church: c.church,
+  }));
 };
