@@ -4,6 +4,13 @@ import { Card, StatCard, Table, Button, Modal, Toast } from "../components";
 import { useParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import {
+  CircleCheckBig,
+  Clock3,
+  RefreshCcw,
+  Users,
+  XCircle,
+} from "lucide-react";
+import {
   useCounselorAssignedUsersQuery,
   useCounselorDashboardQuery,
   useVerifyCounselorUserMutation,
@@ -131,7 +138,7 @@ const CounselorDashboard = () => {
         <div className="space-y-6">
           <h1 className="text-3xl font-bold text-gray-900">
             {isHigherRoleViewer
-              ? `Viewing Counselor ${dashboard?.counselor?.name} Dashboard`
+              ? `Viewing Counselor ${dashboard?.counselor?.name || ""}'s Dashboard`
               : "Counselor Dashboard"}
           </h1>
 
@@ -139,31 +146,31 @@ const CounselorDashboard = () => {
             <StatCard
               label="Total Assigned"
               value={dashboard?.stats?.totalAssigned || 0}
-              icon="U"
+              icon={<Users className="w-8 h-8" />}
               color="blue"
             />
             <StatCard
               label="Pending"
               value={dashboard?.stats?.pending || 0}
-              icon="P"
+              icon={<Clock3 className="w-8 h-8" />}
               color="yellow"
             />
             <StatCard
               label="In Progress"
               value={dashboard?.stats?.inProgress || 0}
-              icon="I"
+              icon={<RefreshCcw className="w-8 h-8" />}
               color="blue"
             />
             <StatCard
               label="Verified"
               value={dashboard?.stats?.verified || 0}
-              icon="V"
+              icon={<CircleCheckBig className="w-8 h-8" />}
               color="green"
             />
             <StatCard
               label="Rejected"
               value={dashboard?.stats?.rejected || 0}
-              icon="R"
+              icon={<XCircle className="w-8 h-8" />}
               color="red"
             />
           </div>

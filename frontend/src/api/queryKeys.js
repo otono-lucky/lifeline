@@ -23,6 +23,7 @@ export const queryKeys = {
 
   admin: {
     all: ["admin"],
+    overview: () => ["admin", "overview"],
     dashboard: () => ["admin", "dashboard"],
     stats: (period = "week") => ["admin", "stats", period],
     users: (params = {}) => withParams(["admin", "users"], params),

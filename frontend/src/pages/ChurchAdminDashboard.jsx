@@ -5,6 +5,14 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import CreateCounsellorModal from "../features/dashboard/components/CreateCounsellorModal";
 import {
+  CircleCheckBig,
+  CircleHelp,
+  Clock3,
+  UserCheck,
+  Users,
+  XCircle,
+} from "lucide-react";
+import {
   useAssignCounselorMutation,
   useChurchAdminCounselorsQuery,
   useChurchAdminDashboardQuery,
@@ -30,25 +38,44 @@ const ChurchAdminDashboard = () => {
     counselorId: "",
   });
 
-  const dashboardQuery = useChurchAdminDashboardQuery(viewedChurchAdminAccountId, {
-    onError: () => setToast({ type: "error", message: "Failed to fetch dashboard" }),
-  });
-  const dashboard = dashboardQuery.data?.success ? dashboardQuery.data.data : null;
+  const dashboardQuery = useChurchAdminDashboardQuery(
+    viewedChurchAdminAccountId,
+    {
+      onError: () =>
+        setToast({ type: "error", message: "Failed to fetch dashboard" }),
+    },
+  );
+  const dashboard = dashboardQuery.data?.success
+    ? dashboardQuery.data.data
+    : null;
   const churchId = dashboard?.church?.id;
 
-  const membersQuery = useChurchAdminMembersQuery(churchId, {}, {
-    enabled: Boolean(churchId) && activeTab === "members",
-    onError: () => setToast({ type: "error", message: "Failed to fetch members" }),
-  });
+  const membersQuery = useChurchAdminMembersQuery(
+    churchId,
+    {},
+    {
+      enabled: Boolean(churchId) && activeTab === "members",
+      onError: () =>
+        setToast({ type: "error", message: "Failed to fetch members" }),
+    },
+  );
 
-  const counselorsQuery = useChurchAdminCounselorsQuery(churchId, {}, {
-    enabled: Boolean(churchId) && (activeTab === "counselors" || showAssignUser),
-    onError: () => setToast({ type: "error", message: "Failed to fetch counselors" }),
-  });
+  const counselorsQuery = useChurchAdminCounselorsQuery(
+    churchId,
+    {},
+    {
+      enabled:
+        Boolean(churchId) && (activeTab === "counselors" || showAssignUser),
+      onError: () =>
+        setToast({ type: "error", message: "Failed to fetch counselors" }),
+    },
+  );
 
   const assignCounselorMutation = useAssignCounselorMutation();
 
-  const members = membersQuery.data?.success ? membersQuery.data.data.members || [] : [];
+  const members = membersQuery.data?.success
+    ? membersQuery.data.data.members || []
+    : [];
   const counselors = counselorsQuery.data?.success
     ? counselorsQuery.data.data.counselors || []
     : [];
@@ -112,7 +139,22 @@ const ChurchAdminDashboard = () => {
       key: "assignedCounselor",
       label: "Assigned To",
       render: (_, row) => row.assignedCounselor?.name || "Unassigned",
+    }
+  ];
+  const recentMemberColumns = [
+    {
+      key: "accountId",
+      label: "ID",
+      render: (accountId) => accountId?.substring(0, 8),
     },
+    { key: "firstName", label: "Name" },
+    { key: "email", label: "Email" },
+    { key: "verificationStatus", label: "Status" },
+    {
+      key: "assignedCounselor",
+      label: "Assigned To",
+      render: (_, row) => row.assignedCounselor || "Unassigned",
+    }
   ];
 
   const counselorColumns = [
@@ -130,13 +172,23 @@ const ChurchAdminDashboard = () => {
     { key: "bio", label: "Bio" },
   ];
 
+
   return (
     <DashboardLayout sidebar={sidebar}>
-      {activeTab === "overview" && dashboard && (
+     
+      {loading && activeTab === "overview" ? (
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center mb-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-gray-600">Loading...</p>
+          </div>
+        </div>
+      ) : (
+        activeTab === "overview" && dashboard && (
         <div className="space-y-6">
           <h1 className="text-3xl font-bold text-gray-900">
             {isHigherRoleViewer
-              ? `Viewing Church Admin Dashboard (${dashboard.church?.name})`
+              ? `Viewing Church Admin ${dashboard?.churchAdmin?.name || ""}'s Dashboard`
               : `${dashboard.church?.name} Dashboard`}
           </h1>
 
@@ -162,29 +214,62 @@ const ChurchAdminDashboard = () => {
           </Card>
 
           <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-6">
-            <StatCard label="Total Members" value={dashboard.stats?.totalMembers || 0} icon="U" color="blue" />
-            <StatCard label="Verified Members" value={dashboard.stats?.verifiedMembers || 0} icon="V" color="green" />
-            <StatCard label="Pending" value={dashboard.stats?.pendingVerification || 0} icon="P" color="yellow" />
-            <StatCard label="Unverified" value={dashboard.stats?.unverifiedMembers || 0} icon="N" color="yellow" />
-            <StatCard label="Rejected" value={dashboard.stats?.rejectedMembers || 0} icon="R" color="red" />
-            <StatCard label="Counselors" value={dashboard.stats?.totalCounselors || 0} icon="C" color="blue" />
+            <StatCard
+              label="Total Members"
+              value={dashboard.stats?.totalMembers || 0}
+              icon={<Users className="w-8 h-8" />}
+              color="blue"
+            />
+            <StatCard
+              label="Verified Members"
+              value={dashboard.stats?.verifiedMembers || 0}
+              icon={<CircleCheckBig className="w-8 h-8" />}
+              color="green"
+            />
+            <StatCard
+              label="Pending"
+              value={dashboard.stats?.pendingVerification || 0}
+              icon={<Clock3 className="w-8 h-8" />}
+              color="yellow"
+            />
+            <StatCard
+              label="Unverified"
+              value={dashboard.stats?.unverifiedMembers || 0}
+              icon={<CircleHelp className="w-8 h-8" />}
+              color="yellow"
+            />
+            <StatCard
+              label="Rejected"
+              value={dashboard.stats?.rejectedMembers || 0}
+              icon={<XCircle className="w-8 h-8" />}
+              color="red"
+            />
+            <StatCard
+              label="Counselors"
+              value={dashboard.stats?.totalCounselors || 0}
+              icon={<UserCheck className="w-8 h-8" />}
+              color="blue"
+            />
           </div>
 
           <Card title="Recent Members" subtitle="Latest members joined">
             <Table
-              columns={memberColumns}
+              columns={recentMemberColumns}
               data={dashboard.recentMembers || []}
               loading={loading}
             />
           </Card>
         </div>
-      )}
+      ))}
+      
 
       {activeTab === "members" && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Members</h1>
-            <Button onClick={() => setShowAssignUser(true)}>Assign to Counselor</Button>
+            <Button onClick={() => setShowAssignUser(true)}>
+              Assign to Counselor
+            </Button>
           </div>
 
           <Card>
@@ -200,8 +285,9 @@ const ChurchAdminDashboard = () => {
                     setAssignForm({ ...assignForm, userId: row.accountId });
                     setShowAssignUser(true);
                   }}
+                  disabled={row["assignedCounselor"] !== "Unassigned"}
                 >
-                  Assign
+                  {row["assignedCounselor"] !== "Unassigned" ? "Assigned" : "Assign"}
                 </Button>
               )}
             />
@@ -213,7 +299,9 @@ const ChurchAdminDashboard = () => {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Counselors</h1>
-            <Button onClick={() => setShowCreateCounselor(true)}>Create Counselor</Button>
+            <Button onClick={() => setShowCreateCounselor(true)}>
+              Create Counselor
+            </Button>
           </div>
 
           <Card>
@@ -225,7 +313,9 @@ const ChurchAdminDashboard = () => {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={() => navigate(`/dashboard/counselor/${row.accountId}`)}
+                  onClick={() =>
+                    navigate(`/dashboard/counselor/${row.accountId}`)
+                  }
                 >
                   View Dashboard
                 </Button>
@@ -250,7 +340,10 @@ const ChurchAdminDashboard = () => {
         size="md"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowAssignUser(false)}>
+            <Button
+              variant="secondary"
+              onClick={() => setShowAssignUser(false)}
+            >
               Cancel
             </Button>
             <Button onClick={handleAssignUser} disabled={loading}>
@@ -263,7 +356,9 @@ const ChurchAdminDashboard = () => {
           <select
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={assignForm.userId}
-            onChange={(e) => setAssignForm({ ...assignForm, userId: e.target.value })}
+            onChange={(e) =>
+              setAssignForm({ ...assignForm, userId: e.target.value })
+            }
             required
           >
             <option value="">Select Member</option>
