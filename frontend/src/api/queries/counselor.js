@@ -36,6 +36,9 @@ export const useVerifyCounselorUserMutation = (options = {}) => {
         queryKey: ["counselor", "assigned-users", scopedAccountId],
       });
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.users.profile(variables?.userAccountId),
+      });
       if (onSuccess) {
         onSuccess(data, variables, context);
       }

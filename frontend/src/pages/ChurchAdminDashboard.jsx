@@ -278,17 +278,26 @@ const ChurchAdminDashboard = () => {
               data={members}
               loading={loading}
               actions={(row) => (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setAssignForm({ ...assignForm, userId: row.accountId });
-                    setShowAssignUser(true);
-                  }}
-                  disabled={row["assignedCounselor"] !== "Unassigned"}
-                >
-                  {row["assignedCounselor"] !== "Unassigned" ? "Assigned" : "Assign"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/dashboard/user/${row.accountId}`)}
+                  >
+                    View Dashboard
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setAssignForm({ ...assignForm, userId: row.accountId });
+                      setShowAssignUser(true);
+                    }}
+                    disabled={Boolean(row.assignedCounselor)}
+                  >
+                    {row.assignedCounselor ? "Assigned" : "Assign"}
+                  </Button>
+                </div>
               )}
             />
           </Card>

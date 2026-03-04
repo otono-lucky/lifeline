@@ -87,6 +87,28 @@ export const useAdminVerifyUserMutation = (options = {}) => {
     onSuccess: (data, variables, context) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.overview() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.users.profile(variables?.accountId),
+      });
+      if (onSuccess) onSuccess(data, variables, context);
+    },
+    ...restOptions,
+  });
+};
+
+export const useAdminUpdateUserStatusMutation = (options = {}) => {
+  const queryClient = useQueryClient();
+  const { onSuccess, ...restOptions } = options;
+
+  return useMutation({
+    mutationFn: ({ accountId, status }) =>
+      adminService.updateUserStatus(accountId, status),
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.overview() });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.users.profile(variables?.accountId),
+      });
       if (onSuccess) onSuccess(data, variables, context);
     },
     ...restOptions,

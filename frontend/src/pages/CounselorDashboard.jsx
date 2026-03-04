@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { DashboardLayout } from "../features/dashboard/components/DashboardLayout";
 import { Card, StatCard, Table, Button, Modal, Toast } from "../components";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import {
   CircleCheckBig,
@@ -19,6 +19,7 @@ import {
 const CounselorDashboard = () => {
   const { user } = useAuth();
   const { id: viewedCounselorAccountId } = useParams();
+  const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
@@ -196,6 +197,13 @@ const CounselorDashboard = () => {
               loading={usersLoading}
               actions={(row) => (
                 <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/dashboard/user/${row.accountId}`)}
+                  >
+                    View Dashboard
+                  </Button>
                   <Button
                     size="sm"
                     variant="success"

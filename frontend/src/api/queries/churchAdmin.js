@@ -44,13 +44,15 @@ export const useAssignCounselorMutation = (options = {}) => {
     onSuccess: (data, variables, context) => {
       if (variables?.churchId) {
         queryClient.invalidateQueries({
-          queryKey: ["churches", "members", variables.churchId],
+          queryKey: queryKeys.churches.members(variables.churchId),
         });
       } else {
-        queryClient.invalidateQueries({ queryKey: ["churches", "members"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.churches.all });
       }
-      queryClient.invalidateQueries({ queryKey: ["church-admin", "dashboard"] });
-      queryClient.invalidateQueries({ queryKey: ["church-admin", "counselors"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.churchAdmin.all });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.users.profile(variables?.userAccountId),
+      });
       if (onSuccess) {
         onSuccess(data, variables, context);
       }

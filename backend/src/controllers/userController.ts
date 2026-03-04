@@ -56,7 +56,7 @@ export const list = async (req: Request, res: Response) => {
  * @access  SuperAdmin, Counselor, User (own profile)
  */
 export const getOne = async (req: Request, res: Response) => {
-  console.log("[GET /api/users/:id] Starting request - UserId:", req.params);
+  console.log("[GET /api/users/:id] Starting request - UserId:", req.params.id);
   try {
     const accountId = String(req.params.id);
 

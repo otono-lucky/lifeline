@@ -2,14 +2,8 @@ import apiClient from "../apiClient";
 
 export const userService = {
   // Get user profile (own)
-  getProfile: async () => {
-    const response = await apiClient.get("/auth/me");
-    return response.data;
-  },
-
-  // Update user profile
-  updateProfile: async (data) => {
-    const response = await apiClient.put("/users/me", data);
+  getProfile: async (accountId) => {
+    const response = await apiClient.get(`/users/${accountId}`);
     return response.data;
   },
 

@@ -426,13 +426,22 @@ const SuperAdminDashboard = () => {
               data={users}
               loading={usersLoading}
               actions={(row) => (
-                <Button
-                  size="sm"
-                  variant={row.isVerified ? "secondary" : "success"}
-                  onClick={() => handleVerifyUser(row.accountId, !row.isVerified)}
-                >
-                  {row.isVerified ? "Unverify" : "Verify"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => navigate(`/dashboard/user/${row.accountId}`)}
+                  >
+                    View Dashboard
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant={row.isVerified ? "secondary" : "success"}
+                    onClick={() => handleVerifyUser(row.accountId, !row.isVerified)}
+                  >
+                    {row.isVerified ? "Unverify" : "Verify"}
+                  </Button>
+                </div>
               )}
             />
           </Card>

@@ -1,3 +1,5 @@
+
+
 const withParams = (key, params = {}) => [...key, params];
 
 export const queryKeys = {
@@ -8,7 +10,7 @@ export const queryKeys = {
 
   users: {
     all: ["users"],
-    me: () => ["users", "me"],
+    profile: (id) => ["users", "profile", id],
     list: (params = {}) => withParams(["users", "list"], params),
     detail: (id) => ["users", "detail", id],
   },
