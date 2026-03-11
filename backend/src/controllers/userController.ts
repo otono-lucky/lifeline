@@ -7,7 +7,12 @@ import {
   getUserById,
   updateUser,
   updateUserVerification,
+  updateUserProfileImage,
+  createUserSocialMedia,
+  deleteUserSocialMedia,
+  listUserSocialMedia,
 } from "../services/userService";
+import { uploadProfileImageToCloudinary } from "../services/mediaService";
 import { updateAccountStatus } from "../services/accountService";
 import { prisma } from "../config/db";
 import { successResponse, errorResponse } from "../utils/responseHandler";
@@ -110,6 +115,8 @@ export const update = async (req: Request, res: Response) => {
       interests,
       church: churchId,
       matchPreference,
+      dateOfBirth,
+      videoIntroUrl,
     } = req.body;
 
     // If regular user, they can only update their own profile
@@ -117,6 +124,16 @@ export const update = async (req: Request, res: Response) => {
         return res
           .status(403)
           .json(errorResponse("You can only update your own profile"));
+    }
+
+    if (typeof req.body?.profilePictureUrl === "string") {
+      return res
+        .status(400)
+        .json(
+          errorResponse(
+            "Profile image updates must use /users/:id/profile-image",
+          ),
+        );
     }
 
     const user = await updateUser(accountId, {
@@ -131,6 +148,8 @@ export const update = async (req: Request, res: Response) => {
       interests,
       churchId,
       matchPreference,
+      dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
+      videoIntroUrl,
     });
     console.log("[PUT /api/users/:id] Success - AccountId:", user.accountId);
 
@@ -243,5 +262,99 @@ export const updateStatus = async (req: Request, res: Response) => {
       .json(
         errorResponse(error.message || "Server error updating user status"),
       );
+  }
+};
+
+export const listSocialMedia = async (req: Request, res: Response) => {
+  try {
+    const accountId = String(req.params.id);
+    if (req.account.role === "User" && req.account.id !== accountId) {
+      return res
+        .status(403)
+        .json(errorResponse("You can only view your own social handles"));
+    }
+
+    const socialMedia = await listUserSocialMedia(accountId);
+    res.json(successResponse("Social media handles fetched", { socialMedia }));
+  } catch (error: any) {
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching social handles"));
+  }
+};
+
+export const createSocialMedia = async (req: Request, res: Response) => {
+  try {
+    const accountId = String(req.params.id);
+    const { platform, handleOrUrl } = req.body;
+
+    if (req.account.role === "User" && req.account.id !== accountId) {
+      return res
+        .status(403)
+        .json(errorResponse("You can only update your own social handles"));
+    }
+
+    if (!platform || !handleOrUrl) {
+      return res
+        .status(400)
+        .json(errorResponse("platform and handleOrUrl are required"));
+    }
+
+    const social = await createUserSocialMedia(accountId, { platform, handleOrUrl });
+    res.status(201).json(successResponse("Social media handle added", { social }));
+  } catch (error: any) {
+    res
+      .status(400)
+      .json(errorResponse(error.message || "Server error creating social handle"));
+  }
+};
+
+export const removeSocialMedia = async (req: Request, res: Response) => {
+  try {
+    const accountId = String(req.params.id);
+    const socialId = String(req.params.socialId);
+
+    if (req.account.role === "User" && req.account.id !== accountId) {
+      return res
+        .status(403)
+        .json(errorResponse("You can only update your own social handles"));
+    }
+
+    await deleteUserSocialMedia(accountId, socialId);
+    res.json(successResponse("Social media handle removed"));
+  } catch (error: any) {
+    res
+      .status(400)
+      .json(errorResponse(error.message || "Server error deleting social handle"));
+  }
+};
+
+export const uploadProfileImage = async (req: Request, res: Response) => {
+  try {
+    const accountId = String(req.params.id);
+
+    if (req.account.role === "User" && req.account.id !== accountId) {
+      return res
+        .status(403)
+        .json(errorResponse("You can only update your own profile image"));
+    }
+
+    if (!req.file?.buffer) {
+      return res.status(400).json(errorResponse("No image file uploaded"));
+    }
+
+    const uploaded = await uploadProfileImageToCloudinary(req.file.buffer);
+    const user = await updateUserProfileImage(accountId, uploaded.secureUrl);
+
+    res.json(
+      successResponse("Profile image uploaded successfully", {
+        profilePictureUrl: uploaded.secureUrl,
+        user,
+      }),
+    );
+  } catch (error: any) {
+    res
+      .status(400)
+      .json(errorResponse(error.message || "Server error uploading profile image"));
   }
 };

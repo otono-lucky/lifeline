@@ -3,6 +3,16 @@
 
 import { MatchPreferenceType } from "@prisma/client";
 import { prisma } from "../config/db";
+import { findRandomCounselorId, getMatchingEligibility } from "./matchingService";
+
+export const SOCIAL_PLATFORM_OPTIONS = [
+  "Facebook",
+  "Instagram",
+  "X",
+  "LinkedIn",
+  "TikTok",
+  "YouTube",
+] as const;
 
 /**
  * Get all users (with filters)
@@ -89,11 +99,9 @@ export const getUsers = async (filters?: {
       accountStatus: u.account.status,
       createdAt: u.account.createdAt,
       isVerified: u.isVerified,
-      verificationStatus: u.verificationStatus,
-      verificationNotes: u.verificationNotes,
-      verifiedAt: u.verifiedAt,
-      subscriptionTier: u.subscriptionTier,
-      subscriptionStatus: u.subscriptionStatus,
+      isActive: u.account.status === "active",      
+      dateOfBirth: u.dateOfBirth,
+      profilePictureUrl: u.profilePictureUrl,
       church: u.church,
       assignedCounselor: u.assignedCounselor
         ? {
@@ -151,12 +159,23 @@ export const getUserById = async (accountId: string) => {
           },
         },
       },
+      socialMediaHandles: {
+        select: {
+          id: true,
+          platform: true,
+          handleOrUrl: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 
   if (!row) {
     throw new Error("User not found");
   }
+
+  const matchingEligibility = await getMatchingEligibility(accountId);
 
   return {
     accountId: row.account.id,
@@ -171,6 +190,8 @@ export const getUserById = async (accountId: string) => {
     verificationStatus: row.verificationStatus,
     verificationNotes: row.verificationNotes,
     verifiedAt: row.verifiedAt,
+    dateOfBirth: row.dateOfBirth,
+    gender: row.gender,
     subscriptionTier: row.subscriptionTier,
     subscriptionStatus: row.subscriptionStatus,
     originCountry: row.originCountry,
@@ -183,6 +204,10 @@ export const getUserById = async (accountId: string) => {
     occupation: row.occupation,
     interests: row.interests,
     matchPreference: row.matchPreference,
+    profilePictureUrl: row.profilePictureUrl,
+    videoIntroUrl: row.videoIntroUrl,
+    socialMediaHandles: row.socialMediaHandles,
+    matchingEligibility,
     church: row.church,
     assignedCounselor: row.assignedCounselor
       ? {
@@ -212,13 +237,63 @@ export const updateUser = async (
     interests?: any;
     churchId?: string;
     matchPreference?: MatchPreferenceType;
+    dateOfBirth?: Date;
+    videoIntroUrl?: string;
   }
 ) => {
   const resolvedUser = await resolveUserByIdentifier(userId);
 
   const user = await prisma.user.update({
     where: { id: resolvedUser.id },
-    data,
+    data: {
+      ...data,
+    },
+  });
+
+  return user;
+};
+
+/**
+ * Update user profile image separately from profile data.
+ */
+export const updateUserProfileImage = async (
+  userId: string,
+  profilePictureUrl: string,
+) => {
+  const resolvedUser = await resolveUserByIdentifier(userId);
+
+  const existingUser = await prisma.user.findUnique({
+    where: { id: resolvedUser.id },
+    select: {
+      id: true,
+      assignedCounselorId: true,
+      churchId: true,
+      profilePictureUrl: true,
+    },
+  });
+
+  if (!existingUser) {
+    throw new Error("User not found");
+  }
+
+  const shouldAutoAssignCounselor =
+    !existingUser.assignedCounselorId &&
+    profilePictureUrl.trim().length > 0 &&
+    profilePictureUrl !== existingUser.profilePictureUrl;
+
+  let assignedCounselorId: string | undefined;
+  if (shouldAutoAssignCounselor) {
+    assignedCounselorId = await findRandomCounselorId(existingUser.churchId);
+  }
+
+  const user = await prisma.user.update({
+    where: { id: resolvedUser.id },
+    data: {
+      profilePictureUrl,
+      ...(shouldAutoAssignCounselor && assignedCounselorId
+        ? { assignedCounselorId, verificationStatus: "in_progress" }
+        : {}),
+    },
   });
 
   return user;
@@ -256,4 +331,84 @@ const resolveUserByIdentifier = async (identifier: string) => {
   }
 
   return userByAccount;
+};
+
+export const listUserSocialMedia = async (accountId: string) => {
+  const user = await prisma.user.findUnique({
+    where: { accountId },
+    include: {
+      socialMediaHandles: {
+        select: {
+          id: true,
+          platform: true,
+          handleOrUrl: true,
+          createdAt: true,
+        },
+        orderBy: { createdAt: "desc" },
+      },
+    },
+  });
+
+  if (!user) {
+    throw new Error("User not found");
+  }
+
+  return user.socialMediaHandles;
+};
+
+export const createUserSocialMedia = async (
+  accountId: string,
+  payload: { platform: string; handleOrUrl: string },
+) => {
+  const resolvedUser = await resolveUserByIdentifier(accountId);
+
+  if (!SOCIAL_PLATFORM_OPTIONS.includes(payload.platform as any)) {
+    throw new Error(
+      `Invalid platform. Allowed values: ${SOCIAL_PLATFORM_OPTIONS.join(", ")}`,
+    );
+  }
+
+  const count = await prisma.userSocialMedia.count({
+    where: { userId: resolvedUser.id },
+  });
+
+  if (count >= 4) {
+    throw new Error("You can only add up to 4 social media handles");
+  }
+
+  const created = await prisma.userSocialMedia.create({
+    data: {
+      userId: resolvedUser.id,
+      platform: payload.platform,
+      handleOrUrl: payload.handleOrUrl,
+    },
+  });
+
+  return created;
+};
+
+export const deleteUserSocialMedia = async (
+  accountId: string,
+  socialId: string,
+) => {
+  const resolvedUser = await resolveUserByIdentifier(accountId);
+  const social = await prisma.userSocialMedia.findUnique({
+    where: { id: socialId },
+    select: { id: true, userId: true },
+  });
+
+  if (!social || social.userId !== resolvedUser.id) {
+    throw new Error("Social media handle not found");
+  }
+
+  const currentCount = await prisma.userSocialMedia.count({
+    where: { userId: resolvedUser.id },
+  });
+  if (currentCount <= 2) {
+    throw new Error("At least 2 social media handles are required");
+  }
+
+  await prisma.userSocialMedia.delete({
+    where: { id: socialId },
+  });
 };

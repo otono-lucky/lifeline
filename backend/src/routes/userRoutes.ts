@@ -5,6 +5,10 @@ import express from "express";
 import * as UserController from "../controllers/userController";
 import authMiddleware from "../middleware/authMiddleware";
 import { requireSuperAdmin } from "../middleware/requireRole";
+import {
+  profileImageUpload,
+  handleUploadError,
+} from "../middleware/uploadMiddleware";
 
 const router = express.Router();
 
@@ -30,6 +34,14 @@ router.put(
   UserController.update
 );
 
+router.post(
+  "/:id/profile-image",
+  authMiddleware,
+  profileImageUpload.single("image"),
+  handleUploadError,
+  UserController.uploadProfileImage,
+);
+
 // Update user verification status
 router.patch(
   "/:id/verification",
@@ -44,6 +56,24 @@ router.patch(
   authMiddleware,
   requireSuperAdmin,
   UserController.updateStatus
+);
+
+router.get(
+  "/:id/social-media",
+  authMiddleware,
+  UserController.listSocialMedia
+);
+
+router.post(
+  "/:id/social-media",
+  authMiddleware,
+  UserController.createSocialMedia
+);
+
+router.delete(
+  "/:id/social-media/:socialId",
+  authMiddleware,
+  UserController.removeSocialMedia
 );
 
 export default router;

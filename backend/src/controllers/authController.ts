@@ -2,7 +2,6 @@
 // Complete authentication endpoints
 
 import { Request, Response } from "express";
-import bcrypt from "bcryptjs";
 import { prisma } from "../config/db";
 import { generateToken } from "../utils/tokenManager";
 import {
@@ -30,6 +29,7 @@ export const signup = async (req: Request, res: Response) => {
       phone,
       password,
       gender,
+      dateOfBirth,
       originCountry,
       originState,
       originLga,
@@ -70,6 +70,7 @@ export const signup = async (req: Request, res: Response) => {
         user: {
           create: {
             gender,
+            dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : undefined,
             originCountry,
             originState,
             originLga,

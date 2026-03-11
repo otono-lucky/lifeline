@@ -58,6 +58,23 @@ enum VerificationStatus {
   rejected
 }
 
+enum MatchStatus {
+  AWAITING_DECISIONS
+  WAITING_FOR_OTHER
+  MUTUAL_ACCEPTED
+  DECLINED
+  EXPIRED
+  IN_CONVERSATION
+  COURTSHIP
+  MARRIED
+}
+
+enum MatchDecision {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
+
 // ============= AUTH TABLE =============
 
 model Account {
@@ -130,6 +147,7 @@ model Counselor {
   account       Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   church        Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
   assignedUsers User[]  @relation("AssignedUsers")
+  createdMatches Match[]
 
   @@index([churchId])
   @@map("counselors")
@@ -139,6 +157,7 @@ model User {
   id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   accountId String     @unique @db.Uuid
   gender    GenderType
+  dateOfBirth DateTime?
 
   // Nigerian Location
   originCountry String?
@@ -154,6 +173,8 @@ model User {
   occupation      String?
   interests       Json?
   matchPreference MatchPreferenceType?
+  profilePictureUrl String?
+  videoIntroUrl     String?
 
   // Subscription
   subscriptionTier      SubscriptionTierType   @default(free)
@@ -173,9 +194,59 @@ model User {
   church   Church? @relation("ChurchMembers", fields: [churchId], references: [id])
 
   account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  socialMediaHandles UserSocialMedia[]
+  matchParticipations MatchParticipant[]
 
   @@index([churchId])
   @@map("users")
+}
+
+model Match {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status       MatchStatus @default(AWAITING_DECISIONS)
+  counselorId  String?     @db.Uuid
+  createdAt    DateTime    @default(now())
+  endedAt      DateTime?
+  compatibilityScore Int?
+
+  counselor    Counselor?        @relation(fields: [counselorId], references: [id], onDelete: SetNull)
+  participants MatchParticipant[]
+
+  @@index([status])
+  @@index([counselorId])
+  @@map("matches")
+}
+
+model MatchParticipant {
+  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  matchId    String        @db.Uuid
+  userId     String        @db.Uuid
+  decision   MatchDecision @default(PENDING)
+  feedback   String?
+  notes      String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, userId])
+  @@index([userId])
+  @@index([decision])
+  @@map("match_participants")
+}
+
+model UserSocialMedia {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @db.Uuid
+  platform    String
+  handleOrUrl String
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_social_media")
 }
 
 // ============= CHURCH MODEL =============

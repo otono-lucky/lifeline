@@ -1,6 +1,7 @@
 import dotenv from "dotenv";
 
-dotenv.config();
+const envPath = process.env.ENV_FILE_PATH || process.env.DOTENV_CONFIG_PATH || ".env";
+dotenv.config({ path: envPath });
 
 const requiredEnv = (name) => {
   const value = process.env[name];
@@ -35,6 +36,12 @@ const env = {
     user: process.env.SMTP_USER,
     from: process.env.FROM_EMAIL,
     pass: process.env.SMTP_PASS,
+  },
+  cloudinary: {
+    cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+    apiKey: process.env.CLOUDINARY_API_KEY || "",
+    apiSecret: process.env.CLOUDINARY_API_SECRET || "",
+    uploadFolder: process.env.CLOUDINARY_UPLOAD_FOLDER || "lifeline/profile-images",
   },
 };
 

@@ -8,6 +8,7 @@ import churchAdminRoutes from "./churchAdminRoutes";
 import counselorRoutes from "./counsellorRoutes";
 import userRoutes from "./userRoutes";
 import adminRoutes from "./adminRoutes";
+import matchingRoutes from "./matchingRoutes";
 
 const router = express.Router();
 
@@ -18,5 +19,6 @@ router.use("/church-admin", churchAdminRoutes);
 router.use("/counselor", counselorRoutes);
 router.use("/users", userRoutes);
 router.use("/admin", adminRoutes);
+router.use("/matches", matchingRoutes);
 
 export default router;
