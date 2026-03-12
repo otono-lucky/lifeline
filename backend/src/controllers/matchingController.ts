@@ -14,17 +14,17 @@ import { errorResponse, successResponse } from "../utils/responseHandler";
 
 export const create = async (req: Request, res: Response) => {
   try {
-    const { maleAccountId, femaleAccountId } = req.body;
-    if (!maleAccountId || !femaleAccountId) {
+    const { accountIdA, accountIdB } = req.body;
+    if (!accountIdA || !accountIdB) {
       return res
         .status(400)
-        .json(errorResponse("maleAccountId and femaleAccountId are required"));
+        .json(errorResponse("accountIdA and accountIdB are required"));
     }
 
     const match = await createManualMatch(
       req.account.id,
-      String(maleAccountId),
-      String(femaleAccountId),
+      String(accountIdA),
+      String(accountIdB),
     );
     res.status(201).json(successResponse("Match created successfully", { match }));
   } catch (error: any) {

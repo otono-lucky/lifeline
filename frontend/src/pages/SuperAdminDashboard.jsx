@@ -55,8 +55,8 @@ const SuperAdminDashboard = () => {
   });
 
   const [matchForm, setMatchForm] = useState({
-    maleAccountId: "",
-    femaleAccountId: "",
+    primaryAccountId: "",
+    counterpartAccountId: "",
   });
 
   const overviewQuery = useSuperAdminOverviewQuery({
@@ -254,12 +254,12 @@ const SuperAdminDashboard = () => {
     e.preventDefault();
     try {
       const response = await createMatchMutation.mutateAsync({
-        maleAccountId: matchForm.maleAccountId,
-        femaleAccountId: matchForm.femaleAccountId,
+        accountIdA: matchForm.primaryAccountId,
+        accountIdB: matchForm.counterpartAccountId,
       });
       if (response.success) {
         setToast({ type: "success", message: "Match created successfully!" });
-        setMatchForm({ maleAccountId: "", femaleAccountId: "" });
+        setMatchForm({ primaryAccountId: "", counterpartAccountId: "" });
         setShowCreateMatch(false);
       }
     } catch (error) {
@@ -268,6 +268,15 @@ const SuperAdminDashboard = () => {
         message: error?.response?.data?.message || "Failed to create match",
       });
     }
+  };
+
+  const openMatchModal = (prefill = {}) => {
+    setMatchForm({
+      primaryAccountId: "",
+      counterpartAccountId: "",
+      ...prefill,
+    });
+    setShowCreateMatch(true);
   };
 
   const handleVerifyChurch = async (churchId, status = "active") => {
@@ -407,7 +416,7 @@ const SuperAdminDashboard = () => {
           )}
 
           {overviewData.stats && (
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-6 gap-6">
               <StatCard
                 label="Total Churches"
                 value={overviewData.stats.overview?.churches?.total || 0}
@@ -437,6 +446,12 @@ const SuperAdminDashboard = () => {
                 value={overviewData.stats.overview?.matches?.total || 0}
                 icon={<Users className="w-8 h-8" />}
                 color="blue"
+              />
+              <StatCard
+                label="Active Matches"
+                value={overviewData.stats.overview?.matches?.active || 0}
+                icon={<Users className="w-8 h-8" />}
+                color="green"
               />
             </div>
           )}
@@ -513,6 +528,11 @@ const SuperAdminDashboard = () => {
                       label: row.isVerified ? "Unverify" : "Verify",
                       onClick: () =>
                         handleVerifyUser(row.accountId, !row.isVerified),
+                    },
+                    {
+                      label: "Create Match",
+                      onClick: () =>
+                        openMatchModal({ primaryAccountId: row.accountId }),
                     },
                   ]}
                 />
@@ -792,8 +812,8 @@ const SuperAdminDashboard = () => {
               onClick={handleCreateMatch}
               disabled={
                 createMatchMutation.isPending ||
-                !matchForm.maleAccountId ||
-                !matchForm.femaleAccountId
+                !matchForm.primaryAccountId ||
+                !matchForm.counterpartAccountId
               }
             >
               Create Match
@@ -804,13 +824,17 @@ const SuperAdminDashboard = () => {
         <form className="space-y-4">
           <select
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={matchForm.maleAccountId}
+            value={matchForm.primaryAccountId}
             onChange={(e) =>
-              setMatchForm({ ...matchForm, maleAccountId: e.target.value })
+              setMatchForm({
+                ...matchForm,
+                primaryAccountId: e.target.value,
+                counterpartAccountId: "",
+              })
             }
             required
           >
-            <option value="">Select Male User</option>
+            <option value="">Select Primary User</option>
             {users.map((u) => (
               <option key={u.accountId} value={u.accountId}>
                 {u.firstName} {u.lastName} ({u.email})
@@ -819,19 +843,42 @@ const SuperAdminDashboard = () => {
           </select>
           <select
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={matchForm.femaleAccountId}
+            value={matchForm.counterpartAccountId}
             onChange={(e) =>
-              setMatchForm({ ...matchForm, femaleAccountId: e.target.value })
+              setMatchForm({
+                ...matchForm,
+                counterpartAccountId: e.target.value,
+              })
             }
             required
+            disabled={!matchForm.primaryAccountId}
           >
-            <option value="">Select Female User</option>
-            {users.map((u) => (
-              <option key={u.accountId} value={u.accountId}>
-                {u.firstName} {u.lastName} ({u.email})
-              </option>
-            ))}
+            <option value="">
+              {matchForm.primaryAccountId
+                ? "Select Opposite Gender"
+                : "Select primary user first"}
+            </option>
+            {users
+              .filter((u) => {
+                if (!matchForm.primaryAccountId) return false;
+                const primary = users.find(
+                  (user) => user.accountId === matchForm.primaryAccountId,
+                );
+                if (!primary?.gender || !u.gender) return false;
+                return u.gender !== primary.gender;
+              })
+              .map((u) => (
+                <option key={u.accountId} value={u.accountId}>
+                  {u.firstName} {u.lastName} ({u.email})
+                </option>
+              ))}
           </select>
+          {matchForm.primaryAccountId &&
+            !users.find((u) => u.accountId === matchForm.primaryAccountId)?.gender && (
+              <p className="text-sm text-red-600">
+                Selected user has no gender on record. Update their profile first.
+              </p>
+            )}
         </form>
       </Modal>
 

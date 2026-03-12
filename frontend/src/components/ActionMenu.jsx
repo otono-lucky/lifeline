@@ -27,8 +27,8 @@ export const ActionMenu = ({ items = [] }) => {
         <MoreVertical className="w-4 h-4" />
       </button>
       {open && (
-        <div className="absolute right-0 z-20 mt-2 w-48 rounded-lg border border-gray-200 bg-white shadow-lg">
-          <div className="py-1">
+        <div className="absolute left-0 z-20 mt-7 w-48 rounded-lg border border-gray-200 bg-white shadow-lg popover-content">
+          <div className="flex flex-col py-1">
             {items.map((item) => (
               <button
                 key={item.label}

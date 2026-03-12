@@ -1,209 +1,155 @@
 import bcrypt from "bcryptjs";
-import { PrismaClient } from "@prisma/client";
 import { prisma } from "../src/config/db";
 
 async function main() {
+  console.log("Seeding admin account...");
   const passwordHash = await bcrypt.hash("Password123!", 10);
 
-  const adminAccount = await prisma.account.upsert({
-    where: { email: "admin@lifeline.test" },
-    update: {},
-    create: {
-      firstName: "Admin",
-      lastName: "User",
-      email: "admin@lifeline.test",
-      phone: "0000000000",
-      password: passwordHash,
-      role: "SuperAdmin",
-      isEmailVerified: true,
-      status: "active"
-    },
+  // const adminAccount = await prisma.account.upsert({
+  //   where: { email: "admin@lifeline.test" },
+  //   update: {},
+  //   create: {
+  //     firstName: "Admin",
+  //     lastName: "User",
+  //     email: "admin@lifeline.test",
+  //     phone: "0000000000",
+  //     password: passwordHash,
+  //     role: "SuperAdmin",
+  //     isEmailVerified: true,
+  //     status: "active",
+  //   },
+  // });
+
+  // await prisma.superAdmin.upsert({
+  //   where: { accountId: adminAccount.id },
+  //   update: {},
+  //   create: {
+  //     accountId: adminAccount.id,
+  //   },
+  // });
+
+  console.log("Fetching churches...");
+  const churches = await prisma.church.findMany({
+    select: { id: true },
+    orderBy: { createdAt: "asc" },
   });
 
-  await prisma.superAdmin.upsert({
-    where: { accountId: adminAccount.id },
-    update: {},
-    create: {
-      accountId: adminAccount.id
-    }
-  })
-
-  const church = await prisma.church.upsert({
-    where: { email: "lifelinechurch@test.org" },
-    update: {},
-    create: {
-      officialName: "Lifeline Community Church",
-      aka: "LCC",
-      email: "lifelinechurch@test.org",
-      phone: "08000000001",
-      state: "Lagos",
-      city: "Ikeja",
-      status: "active",
-      createdBy: (await prisma.superAdmin.findUniqueOrThrow({
-        where: { accountId: adminAccount.id },
-      })).id,
-    },
+  console.log("Fetching counsellors...");
+  const counselors = await prisma.counselor.findMany({
+    select: { id: true },
+    orderBy: { account: { createdAt: "asc" } },
   });
 
-  const counselorAccount = await prisma.account.upsert({
-    where: { email: "counselor@lifeline.test" },
-    update: {},
-    create: {
-      firstName: "Grace",
-      lastName: "Counselor",
-      email: "counselor@lifeline.test",
-      phone: "08000000002",
-      password: passwordHash,
-      role: "Counselor",
-      isEmailVerified: true,
-      status: "active",
-    },
-  });
+  if (churches.length === 0 || counselors.length === 0) {
+    throw new Error("No churches or counselors found. Seed them before users.");
+  }
 
-  const counselor = await prisma.counselor.upsert({
-    where: { accountId: counselorAccount.id },
-    update: { churchId: church.id },
-    create: {
-      accountId: counselorAccount.id,
-      churchId: church.id,
-      bio: "Experienced relationship counselor",
-    },
-  });
+  const churchId = churches[0].id;
 
-  const maleAccount = await prisma.account.upsert({
-    where: { email: "male.user@lifeline.test" },
-    update: {},
-    create: {
+  console.log("Seeding sample users...");
+  const sampleUsers = [
+    {
       firstName: "Daniel",
       lastName: "Ayo",
-      email: "male.user@lifeline.test",
+      email: "daniel.ayo@lifeline.test",
       phone: "08000000003",
-      password: passwordHash,
-      role: "User",
-      isEmailVerified: true,
-      status: "active",
+      gender: "Male",
+      dateOfBirth: new Date("1994-05-20"),
+      occupation: "Software Engineer",
+      residenceCountry: "Nigeria",
+      residenceState: "Lagos",
+      residenceCity: "Ikeja",
+      matchPreference: "my_church",
     },
-  });
-
-  const femaleAccount = await prisma.account.upsert({
-    where: { email: "female.user@lifeline.test" },
-    update: {},
-    create: {
+    {
+      firstName: "Samuel",
+      lastName: "Ojo",
+      email: "samuel.ojo@lifeline.test",
+      phone: "08000000004",
+      gender: "Male",
+      dateOfBirth: new Date("1992-11-08"),
+      occupation: "Civil Engineer",
+      residenceCountry: "Nigeria",
+      residenceState: "Oyo",
+      residenceCity: "Ibadan",
+      matchPreference: "my_church",
+    },
+    {
       firstName: "Ruth",
       lastName: "Nneka",
-      email: "female.user@lifeline.test",
-      phone: "08000000004",
-      password: passwordHash,
-      role: "User",
-      isEmailVerified: true,
-      status: "active",
-    },
-  });
-
-  const maleUser = await prisma.user.upsert({
-    where: { accountId: maleAccount.id },
-    update: {
-      churchId: church.id,
-      assignedCounselorId: counselor.id,
-      isVerified: true,
-      verificationStatus: "verified",
-      dateOfBirth: new Date("1995-05-20"),
-      profilePictureUrl: "https://example.com/images/daniel.jpg",
-      videoIntroUrl: "https://youtu.be/example-daniel",
-    },
-    create: {
-      accountId: maleAccount.id,
-      gender: "Male",
-      churchId: church.id,
-      assignedCounselorId: counselor.id,
-      isVerified: true,
-      verificationStatus: "verified",
-      verifiedAt: new Date(),
-      dateOfBirth: new Date("1995-05-20"),
-      occupation: "Software Engineer",
-      profilePictureUrl: "https://example.com/images/daniel.jpg",
-      videoIntroUrl: "https://youtu.be/example-daniel",
-      matchPreference: "my_church",
-    },
-  });
-
-  const femaleUser = await prisma.user.upsert({
-    where: { accountId: femaleAccount.id },
-    update: {
-      churchId: church.id,
-      assignedCounselorId: counselor.id,
-      isVerified: true,
-      verificationStatus: "verified",
-      dateOfBirth: new Date("1997-09-12"),
-      profilePictureUrl: "https://example.com/images/ruth.jpg",
-      videoIntroUrl: "https://youtu.be/example-ruth",
-    },
-    create: {
-      accountId: femaleAccount.id,
+      email: "ruth.nneka@lifeline.test",
+      phone: "08000000005",
       gender: "Female",
-      churchId: church.id,
-      assignedCounselorId: counselor.id,
-      isVerified: true,
-      verificationStatus: "verified",
-      verifiedAt: new Date(),
-      dateOfBirth: new Date("1997-09-12"),
+      dateOfBirth: new Date("1996-09-12"),
       occupation: "Product Designer",
-      profilePictureUrl: "https://example.com/images/ruth.jpg",
-      videoIntroUrl: "https://youtu.be/example-ruth",
+      residenceCountry: "Nigeria",
+      residenceState: "Lagos",
+      residenceCity: "Lekki",
       matchPreference: "my_church",
     },
-  });
-
-  await prisma.userSocialMedia.deleteMany({
-    where: {
-      userId: { in: [maleUser.id, femaleUser.id] },
+    {
+      firstName: "Grace",
+      lastName: "Okoro",
+      email: "grace.okoro@lifeline.test",
+      phone: "08000000006",
+      gender: "Female",
+      dateOfBirth: new Date("1995-03-02"),
+      occupation: "Nutritionist",
+      residenceCountry: "Nigeria",
+      residenceState: "Rivers",
+      residenceCity: "Port Harcourt",
+      matchPreference: "my_church",
     },
-  });
+  ];
 
-  await prisma.userSocialMedia.createMany({
-    data: [
-      { userId: maleUser.id, platform: "Instagram", handleOrUrl: "@danielayo" },
-      { userId: maleUser.id, platform: "LinkedIn", handleOrUrl: "linkedin.com/in/danielayo" },
-      { userId: femaleUser.id, platform: "Instagram", handleOrUrl: "@ruthnneka" },
-      { userId: femaleUser.id, platform: "LinkedIn", handleOrUrl: "linkedin.com/in/ruthnneka" },
-    ],
-  });
+  for (const user of sampleUsers) {
+    const assignedCounselorId =
+      counselors[Math.floor(Math.random() * counselors.length)].id;
 
-  const existingSampleMatch = await prisma.match.findFirst({
-    where: {
-      AND: [
-        { participants: { some: { userId: maleUser.id } } },
-        { participants: { some: { userId: femaleUser.id } } },
-      ],
-    },
-    select: { id: true },
-  });
-
-  if (!existingSampleMatch) {
-    const match = await prisma.match.create({
-      data: {
-        status: "AWAITING_DECISIONS",
-        counselorId: counselor.id,
+    const account = await prisma.account.upsert({
+      where: { email: user.email },
+      update: {},
+      create: {
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        phone: user.phone,
+        password: passwordHash,
+        role: "User",
+        isEmailVerified: true,
+        status: "active",
       },
     });
 
-    await prisma.matchParticipant.createMany({
-      data: [
-        {
-          matchId: match.id,
-          userId: maleUser.id,
-          decision: "PENDING",
-        },
-        {
-          matchId: match.id,
-          userId: femaleUser.id,
-          decision: "PENDING",
-        },
-      ],
+    await prisma.user.upsert({
+      where: { accountId: account.id },
+      update: {
+        churchId,
+        assignedCounselorId,
+        gender: user.gender as any,
+        dateOfBirth: user.dateOfBirth,
+        occupation: user.occupation,
+        residenceCountry: user.residenceCountry,
+        residenceState: user.residenceState,
+        residenceCity: user.residenceCity,
+        matchPreference: user.matchPreference as any,
+      },
+      create: {
+        accountId: account.id,
+        churchId,
+        assignedCounselorId,
+        gender: user.gender as any,
+        dateOfBirth: user.dateOfBirth,
+        occupation: user.occupation,
+        residenceCountry: user.residenceCountry,
+        residenceState: user.residenceState,
+        residenceCity: user.residenceCity,
+        matchPreference: user.matchPreference as any,
+      },
     });
   }
 
-  console.log("Seed completed");
+  console.log("Seed completed.");
 }
 
 main()

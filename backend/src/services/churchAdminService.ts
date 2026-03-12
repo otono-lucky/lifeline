@@ -40,6 +40,38 @@ export const getChurchAdminDashboard = async (
     throw new Error("Church admin profile not found");
   }
 
+  const totalMatches = await prisma.match.count({
+    where: {
+      participants: {
+        some: {
+          user: {
+            churchId: churchAdmin.churchId,
+          },
+        },
+      },
+    },
+  });
+  const activeMatches = await prisma.match.count({
+    where: {
+      status: {
+        in: [
+          "AWAITING_DECISIONS",
+          "WAITING_FOR_OTHER",
+          "MUTUAL_ACCEPTED",
+          "IN_CONVERSATION",
+          "COURTSHIP",
+        ],
+      },
+      participants: {
+        some: {
+          user: {
+            churchId: churchAdmin.churchId,
+          },
+        },
+      },
+    },
+  });
+
   // Calculate stats
   const totalMembers = churchAdmin.church.members.length;
   const verifiedMembers = churchAdmin.church.members.filter(
@@ -104,6 +136,8 @@ export const getChurchAdminDashboard = async (
       unverifiedMembers,
       rejectedMembers,
       totalCounselors,
+      totalMatches,
+      activeMatches,
     },
     recentMembers: recentMembers.map((m) => ({
       accountId: m.accountId,

@@ -47,6 +47,24 @@ export const getCounselorDashboard = async (
     throw new Error("Counselor profile not found");
   }
 
+  const totalMatches = await prisma.match.count({
+    where: { counselorId: counselor.id },
+  });
+  const activeMatches = await prisma.match.count({
+    where: {
+      counselorId: counselor.id,
+      status: {
+        in: [
+          "AWAITING_DECISIONS",
+          "WAITING_FOR_OTHER",
+          "MUTUAL_ACCEPTED",
+          "IN_CONVERSATION",
+          "COURTSHIP",
+        ],
+      },
+    },
+  });
+
   // Calculate stats
   const totalAssigned = counselor.assignedUsers.length;
   const pending = counselor.assignedUsers.filter(
@@ -76,6 +94,8 @@ export const getCounselorDashboard = async (
       inProgress,
       verified,
       rejected,
+      totalMatches,
+      activeMatches,
     },
     assignedUsers: counselor.assignedUsers.map((u) => ({
       accountId: u.accountId,

@@ -1,5 +1,6 @@
 import { MatchDecision, MatchStatus } from "@prisma/client";
 import { prisma } from "../config/db";
+import {calculateAge} from "../utils/ageUtils"
 
 const ACTIVE_MATCH_STATUSES: MatchStatus[] = [
   "AWAITING_DECISIONS",
@@ -19,17 +20,7 @@ const ELEVATED_ROLES = ["SuperAdmin", "ChurchAdmin", "Counselor"] as const;
 const isElevatedRole = (role?: string | null) =>
   Boolean(role && ELEVATED_ROLES.includes(role as any));
 
-const calculateAge = (dateOfBirth?: Date | null) => {
-  if (!dateOfBirth) return null;
-  const now = new Date();
-  let age = now.getFullYear() - dateOfBirth.getFullYear();
-  const monthDiff = now.getMonth() - dateOfBirth.getMonth();
-  const dayDiff = now.getDate() - dateOfBirth.getDate();
-  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-    age -= 1;
-  }
-  return age;
-};
+
 
 const getUserByAccountId = async (accountId: string) => {
   const user = await prisma.user.findUnique({
@@ -88,7 +79,7 @@ const getEligibilityFromUser = (user: {
 }) => {
   const handleCount = user.socialMediaHandles.length;
   return {
-    isEligible: user.isVerified && handleCount >= 2 && handleCount <= 4,
+    isEligible: user.isVerified ,
     reasons: [
       ...(user.isVerified ? [] : ["User must be verified by a counselor"]),
       ...(handleCount < 2
@@ -155,14 +146,14 @@ export const getMatchingEligibility = async (accountId: string) => {
 
 export const createManualMatch = async (
   requesterAccountId: string,
-  maleAccountId: string,
-  femaleAccountId: string,
+  accountIdA: string,
+  accountIdB: string,
 ) => {
-  if (maleAccountId === femaleAccountId) {
+  if (accountIdA === accountIdB) {
     throw new Error("A match must include two distinct users");
   }
 
-  const [requester, maleUser, femaleUser] = await Promise.all([
+  const [requester, userA, userB] = await Promise.all([
     prisma.account.findUnique({
       where: { id: requesterAccountId },
       include: {
@@ -171,8 +162,8 @@ export const createManualMatch = async (
         superAdmin: { select: { id: true } },
       },
     }),
-    getUserByAccountId(maleAccountId),
-    getUserByAccountId(femaleAccountId),
+    getUserByAccountId(accountIdA),
+    getUserByAccountId(accountIdB),
   ]);
 
   if (!requester) {
@@ -183,13 +174,16 @@ export const createManualMatch = async (
     throw new Error("You are not allowed to create matches");
   }
 
-  if (maleUser.gender !== "Male" || femaleUser.gender !== "Female") {
-    throw new Error("Manual match requires one Male user and one Female user");
+  if (userA.gender === userB.gender) {
+    throw new Error("Match requires users of different genders");
   }
 
+  const [maleUser, femaleUser] =
+    userA.gender === "Male" ? [userA, userB] : [userB, userA];
+
   const [maleEligibility, femaleEligibility] = await Promise.all([
-    getMatchingEligibility(maleAccountId),
-    getMatchingEligibility(femaleAccountId),
+    getMatchingEligibility(maleUser.account.id),
+    getMatchingEligibility(femaleUser.account.id),
   ]);
 
   if (!maleEligibility.isEligible) {

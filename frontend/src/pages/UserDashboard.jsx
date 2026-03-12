@@ -589,7 +589,75 @@ const UserDashboard = () => {
             )}
           </Card>
 
-          <Card title="Match Status" subtitle="Your active match and history">
+       
+
+          <Card title="Social Media" subtitle="Curated platform options only">
+            <div className="space-y-2 mb-4">
+              {socialMedia.map((item) => (
+                <div
+                  key={item.id}
+                  className=""
+                >
+                    <h3>{item.platform}</h3>
+                  <div className="flex justify-between items-center border rounded-lg px-3 py-2">
+
+                  <p>
+                    <span className="text-gray-600">{item.handleOrUrl}</span>
+                  </p>
+                  {isOwnProfile && (
+                    <Button
+                      variant="danger"
+                      onClick={() =>
+                        deleteSocialMediaMutation.mutateAsync({
+                          id: viewedAccountId,
+                          socialId: item.id,
+                        })
+                      }
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  )}
+                  </div>
+                </div>
+              ))}
+            </div>
+            {isOwnProfile && socialMedia.length < 4 && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <select
+                  className="px-3 py-2 border rounded-lg"
+                  value={socialForm.platform}
+                  onChange={(e) =>
+                    setSocialForm({ ...socialForm, platform: e.target.value })
+                  }
+                >
+                  {SOCIAL_PLATFORM_OPTIONS.map((platform) => (
+                    <option key={platform} value={platform}>
+                      {platform}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  className="px-3 py-2 border rounded-lg"
+                  placeholder="Handle or URL"
+                  value={socialForm.handleOrUrl}
+                  onChange={(e) =>
+                    setSocialForm({
+                      ...socialForm,
+                      handleOrUrl: e.target.value,
+                    })
+                  }
+                />
+                <Button onClick={addSocial}>
+                  <span className="inline-flex items-center gap-2">
+                    <Plus className="w-4 h-4" />
+                    Add
+                  </span>
+                </Button>
+              </div>
+            )}
+          </Card>
+
+   <Card title="Match Status" subtitle="Your active match and history">
             {matchLoading ? (
               <p className="text-gray-600">Loading match details...</p>
             ) : !activeMatch ? (
@@ -699,73 +767,7 @@ const UserDashboard = () => {
               />
             </div>
           </Card>
-
-          <Card title="Social Media" subtitle="Curated platform options only">
-            <div className="space-y-2 mb-4">
-              {socialMedia.map((item) => (
-                <div
-                  key={item.id}
-                  className=""
-                >
-                    <h3>{item.platform}</h3>
-                  <div className="flex justify-between items-center border rounded-lg px-3 py-2">
-
-                  <p>
-                    <span className="text-gray-600">{item.handleOrUrl}</span>
-                  </p>
-                  {isOwnProfile && (
-                    <Button
-                      variant="danger"
-                      onClick={() =>
-                        deleteSocialMediaMutation.mutateAsync({
-                          id: viewedAccountId,
-                          socialId: item.id,
-                        })
-                      }
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  )}
-                  </div>
-                </div>
-              ))}
-            </div>
-            {isOwnProfile && socialMedia.length < 4 && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <select
-                  className="px-3 py-2 border rounded-lg"
-                  value={socialForm.platform}
-                  onChange={(e) =>
-                    setSocialForm({ ...socialForm, platform: e.target.value })
-                  }
-                >
-                  {SOCIAL_PLATFORM_OPTIONS.map((platform) => (
-                    <option key={platform} value={platform}>
-                      {platform}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="px-3 py-2 border rounded-lg"
-                  placeholder="Handle or URL"
-                  value={socialForm.handleOrUrl}
-                  onChange={(e) =>
-                    setSocialForm({
-                      ...socialForm,
-                      handleOrUrl: e.target.value,
-                    })
-                  }
-                />
-                <Button onClick={addSocial}>
-                  <span className="inline-flex items-center gap-2">
-                    <Plus className="w-4 h-4" />
-                    Add
-                  </span>
-                </Button>
-              </div>
-            )}
-          </Card>
-
+          
           {(canSuperAdminManage || canCounselorManage) && (
             <Card title="Role Actions">
               <div className="flex flex-wrap gap-2">

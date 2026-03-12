@@ -4,6 +4,7 @@
 import { MatchPreferenceType } from "@prisma/client";
 import { prisma } from "../config/db";
 import { findRandomCounselorId, getMatchingEligibility } from "./matchingService";
+import { calculateAge } from "../utils/ageUtils";
 
 export const SOCIAL_PLATFORM_OPTIONS = [
   "Facebook",
@@ -101,6 +102,7 @@ export const getUsers = async (filters?: {
       isVerified: u.isVerified,
       isActive: u.account.status === "active",      
       dateOfBirth: u.dateOfBirth,
+      gender: u.gender,
       profilePictureUrl: u.profilePictureUrl,
       church: u.church,
       assignedCounselor: u.assignedCounselor
@@ -191,6 +193,7 @@ export const getUserById = async (accountId: string) => {
     verificationNotes: row.verificationNotes,
     verifiedAt: row.verifiedAt,
     dateOfBirth: row.dateOfBirth,
+    age: calculateAge(row.dateOfBirth),
     gender: row.gender,
     subscriptionTier: row.subscriptionTier,
     subscriptionStatus: row.subscriptionStatus,

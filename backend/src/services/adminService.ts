@@ -18,6 +18,8 @@ export const getSuperAdminDashboard = async () => {
     totalUsers,
     verifiedUsers,
     premiumUsers,
+    totalMatches,
+    activeMatches,
     recentChurches,
     recentUsers,
   ] = await Promise.all([
@@ -39,6 +41,22 @@ export const getSuperAdminDashboard = async () => {
     prisma.user.count(),
     prisma.user.count({ where: { isVerified: true } }),
     prisma.user.count({ where: { subscriptionTier: "premium" } }),
+
+    // Match stats
+    prisma.match.count(),
+    prisma.match.count({
+      where: {
+        status: {
+          in: [
+            "AWAITING_DECISIONS",
+            "WAITING_FOR_OTHER",
+            "MUTUAL_ACCEPTED",
+            "IN_CONVERSATION",
+            "COURTSHIP",
+          ],
+        },
+      },
+    }),
 
     // Recent activity
     prisma.church.findMany({
@@ -88,6 +106,10 @@ export const getSuperAdminDashboard = async () => {
         verified: verifiedUsers,
         premium: premiumUsers,
         free: totalUsers - premiumUsers,
+      },
+      matches: {
+        total: totalMatches,
+        active: activeMatches,
       },
     },
     recentActivity: {

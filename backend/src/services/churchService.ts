@@ -255,6 +255,7 @@ export const getChurchMembers = async (
       lastName: m.account.lastName,
       email: m.account.email,
       phone: m.account.phone,
+      gender: m.gender,
       verificationStatus: m.verificationStatus,
       verificationNotes: m.verificationNotes,
       verifiedAt: m.verifiedAt,

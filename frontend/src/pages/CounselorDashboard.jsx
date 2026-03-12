@@ -43,8 +43,8 @@ const CounselorDashboard = () => {
     notes: "",
   });
   const [matchForm, setMatchForm] = useState({
-    maleAccountId: "",
-    femaleAccountId: "",
+    primaryAccountId: "",
+    counterpartAccountId: "",
   });
 
   const isHigherRoleViewer =
@@ -131,12 +131,12 @@ const CounselorDashboard = () => {
     e.preventDefault();
     try {
       const response = await createMatchMutation.mutateAsync({
-        maleAccountId: matchForm.maleAccountId,
-        femaleAccountId: matchForm.femaleAccountId,
+        accountIdA: matchForm.primaryAccountId,
+        accountIdB: matchForm.counterpartAccountId,
       });
       if (response.success) {
         setToast({ type: "success", message: "Match created successfully!" });
-        setMatchForm({ maleAccountId: "", femaleAccountId: "" });
+        setMatchForm({ primaryAccountId: "", counterpartAccountId: "" });
         setShowCreateMatch(false);
       }
     } catch (error) {
@@ -145,6 +145,15 @@ const CounselorDashboard = () => {
         message: error?.response?.data?.message || "Failed to create match",
       });
     }
+  };
+
+  const openMatchModal = (prefill = {}) => {
+    setMatchForm({
+      primaryAccountId: "",
+      counterpartAccountId: "",
+      ...prefill,
+    });
+    setShowCreateMatch(true);
   };
 
   const sidebar = (
@@ -223,7 +232,7 @@ const CounselorDashboard = () => {
               : "Counselor Dashboard"}
           </h1>
 
-          <div className="grid grid-cols-2 md:grid-cols-6 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-6">
             <StatCard
               label="Total Assigned"
               value={dashboard?.stats?.totalAssigned || 0}
@@ -259,6 +268,12 @@ const CounselorDashboard = () => {
               value={dashboard?.stats?.totalMatches || 0}
               icon={<Users className="w-8 h-8" />}
               color="blue"
+            />
+            <StatCard
+              label="Active Matches"
+              value={dashboard?.stats?.activeMatches || 0}
+              icon={<Users className="w-8 h-8" />}
+              color="green"
             />
           </div>
 
@@ -305,6 +320,11 @@ const CounselorDashboard = () => {
                         setVerifyForm({ status: "rejected", notes: "" });
                         setShowVerifyModal(true);
                       },
+                    },
+                    {
+                      label: "Create Match",
+                      onClick: () =>
+                        openMatchModal({ primaryAccountId: row.accountId }),
                     },
                   ]}
                 />
@@ -421,8 +441,8 @@ const CounselorDashboard = () => {
               onClick={handleCreateMatch}
               disabled={
                 createMatchMutation.isPending ||
-                !matchForm.maleAccountId ||
-                !matchForm.femaleAccountId
+                !matchForm.primaryAccountId ||
+                !matchForm.counterpartAccountId
               }
             >
               Create Match
@@ -433,13 +453,17 @@ const CounselorDashboard = () => {
         <form className="space-y-4">
           <select
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={matchForm.maleAccountId}
+            value={matchForm.primaryAccountId}
             onChange={(e) =>
-              setMatchForm({ ...matchForm, maleAccountId: e.target.value })
+              setMatchForm({
+                ...matchForm,
+                primaryAccountId: e.target.value,
+                counterpartAccountId: "",
+              })
             }
             required
           >
-            <option value="">Select Male User</option>
+            <option value="">Select Primary User</option>
             {assignedUsers.map((u) => (
               <option key={u.accountId} value={u.accountId}>
                 {u.firstName} {u.lastName} ({u.email})
@@ -448,19 +472,43 @@ const CounselorDashboard = () => {
           </select>
           <select
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={matchForm.femaleAccountId}
+            value={matchForm.counterpartAccountId}
             onChange={(e) =>
-              setMatchForm({ ...matchForm, femaleAccountId: e.target.value })
+              setMatchForm({
+                ...matchForm,
+                counterpartAccountId: e.target.value,
+              })
             }
             required
+            disabled={!matchForm.primaryAccountId}
           >
-            <option value="">Select Female User</option>
-            {assignedUsers.map((u) => (
-              <option key={u.accountId} value={u.accountId}>
-                {u.firstName} {u.lastName} ({u.email})
-              </option>
-            ))}
+            <option value="">
+              {matchForm.primaryAccountId
+                ? "Select Opposite Gender"
+                : "Select primary user first"}
+            </option>
+            {assignedUsers
+              .filter((u) => {
+                if (!matchForm.primaryAccountId) return false;
+                const primary = assignedUsers.find(
+                  (user) => user.accountId === matchForm.primaryAccountId,
+                );
+                if (!primary?.gender || !u.gender) return false;
+                return u.gender !== primary.gender;
+              })
+              .map((u) => (
+                <option key={u.accountId} value={u.accountId}>
+                  {u.firstName} {u.lastName} ({u.email})
+                </option>
+              ))}
           </select>
+          {matchForm.primaryAccountId &&
+            !assignedUsers.find((u) => u.accountId === matchForm.primaryAccountId)
+              ?.gender && (
+              <p className="text-sm text-red-600">
+                Selected user has no gender on record. Update their profile first.
+              </p>
+            )}
         </form>
       </Modal>
 
