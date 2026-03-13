@@ -82,7 +82,9 @@ const CounselorDashboard = () => {
   const verifyUserMutation = useVerifyCounselorUserMutation();
   const createMatchMutation = useCreateManualMatchMutation();
 
-  const dashboard = dashboardQuery.data?.success ? dashboardQuery.data.data : null;
+  const dashboard = dashboardQuery.data?.success
+    ? dashboardQuery.data.data
+    : null;
   const assignedUsers = assignedUsersQuery.data?.success
     ? assignedUsersQuery.data.data.users || []
     : [];
@@ -94,7 +96,8 @@ const CounselorDashboard = () => {
     : null;
 
   const overviewLoading = dashboardQuery.isLoading || dashboardQuery.isFetching;
-  const usersLoading = assignedUsersQuery.isLoading || assignedUsersQuery.isFetching;
+  const usersLoading =
+    assignedUsersQuery.isLoading || assignedUsersQuery.isFetching;
   const matchesLoading = matchesQuery.isLoading || matchesQuery.isFetching;
   const mutationLoading = verifyUserMutation.isPending;
 
@@ -179,10 +182,27 @@ const CounselorDashboard = () => {
   );
 
   const userColumns = [
+    // {
+    //   key: "accountId",
+    //   label: "ID",
+    //   render: (accountId) => accountId?.substring(0, 8),
+    // },
     {
-      key: "accountId",
-      label: "ID",
-      render: (accountId) => accountId?.substring(0, 8),
+      key: "profilePictureUrl",
+      label: "Image",
+      render: (_, row) =>
+        row.profilePictureUrl ? (
+          <img
+            src={row.profilePictureUrl}
+            alt=""
+            className="w-8 h-8 rounded-full"
+          />
+        ) : (
+          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500">
+            {row.firstName?.[0]}
+            {row.lastName?.[0]}
+          </div>
+        ),
     },
     {
       key: "firstName",
@@ -191,6 +211,12 @@ const CounselorDashboard = () => {
     },
     { key: "email", label: "Email" },
     { key: "gender", label: "Gender" },
+    
+    {
+      key: "age",
+      label: "Age",
+      render: (_, row) => (row.age ? row.age : "N/A"),
+    },    
     { key: "verificationStatus", label: "Status" },
     {
       key: "assignedAt",
@@ -209,16 +235,13 @@ const CounselorDashboard = () => {
     {
       key: "createdAt",
       label: "Created",
-      render: (value) =>
-        value ? new Date(value).toLocaleDateString() : "N/A",
+      render: (value) => (value ? new Date(value).toLocaleDateString() : "N/A"),
     },
     {
       key: "participants",
       label: "Participants",
       render: (participants = []) =>
-        participants
-          .map((p) => `${p.firstName} ${p.lastName}`)
-          .join(" & "),
+        participants.map((p) => `${p.firstName} ${p.lastName}`).join(" & "),
     },
   ];
 
@@ -503,10 +526,12 @@ const CounselorDashboard = () => {
               ))}
           </select>
           {matchForm.primaryAccountId &&
-            !assignedUsers.find((u) => u.accountId === matchForm.primaryAccountId)
-              ?.gender && (
+            !assignedUsers.find(
+              (u) => u.accountId === matchForm.primaryAccountId,
+            )?.gender && (
               <p className="text-sm text-red-600">
-                Selected user has no gender on record. Update their profile first.
+                Selected user has no gender on record. Update their profile
+                first.
               </p>
             )}
         </form>

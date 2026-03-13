@@ -72,7 +72,8 @@ const ChurchAdminDashboard = () => {
     churchId,
     {},
     {
-      enabled: Boolean(churchId) && (activeTab === "members" || showCreateMatch),
+      enabled:
+        Boolean(churchId) && (activeTab === "members" || showCreateMatch),
       onError: () =>
         setToast({ type: "error", message: "Failed to fetch members" }),
     },
@@ -192,34 +193,89 @@ const ChurchAdminDashboard = () => {
   );
 
   const memberColumns = [
+    // {
+    //   key: "accountId",
+    //   label: "ID",
+    //   render: (accountId) => accountId?.substring(0, 8),
+    // },
     {
-      key: "accountId",
-      label: "ID",
-      render: (accountId) => accountId?.substring(0, 8),
+      key: "profilePictureUrl",
+      label: "Image",
+      render: (_, row) =>
+        row.profilePictureUrl ? (
+          <img
+            src={row.profilePictureUrl}
+            alt=""
+            className="w-8 h-8 rounded-full"
+          />
+        ) : (
+          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500">
+            {row.firstName?.[0]}
+            {row.lastName?.[0]}
+          </div>
+        ),
     },
     { key: "firstName", label: "Name" },
     { key: "email", label: "Email" },
+    {
+      key: "gender",
+      label: "Gender",
+      render: (_, row) => (row.gender ? row.gender : "N/A"),
+    },
+    {
+      key: "age",
+      label: "Age",
+      render: (_, row) => (row.age ? row.age : "N/A"),
+    },
     { key: "verificationStatus", label: "Status" },
     {
       key: "assignedCounselor",
       label: "Assigned To",
       render: (_, row) => row.assignedCounselor?.name || "Unassigned",
-    }
+    },
   ];
+  
   const recentMemberColumns = [
+    // {
+    //   key: "accountId",
+    //   label: "ID",
+    //   render: (accountId) => accountId?.substring(0, 8),
+    // },
     {
-      key: "accountId",
-      label: "ID",
-      render: (accountId) => accountId?.substring(0, 8),
+      key: "profilePictureUrl",
+      label: "Image",
+      render: (_, row) =>
+        row.profilePictureUrl ? (
+          <img
+            src={row.profilePictureUrl}
+            alt=""
+            className="w-8 h-8 rounded-full"
+          />
+        ) : (
+          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500">
+            {row.firstName?.[0]}
+            {row.lastName?.[0]}
+          </div>
+        ),
     },
     { key: "firstName", label: "Name" },
     { key: "email", label: "Email" },
+    {
+      key: "gender",
+      label: "Gender",
+      render: (_, row) => (row.gender ? row.gender : "N/A"),
+    },
+    {
+      key: "age",
+      label: "Age",
+      render: (_, row) => (row.age ? row.age : "N/A"),
+    },
     { key: "verificationStatus", label: "Status" },
     {
       key: "assignedCounselor",
       label: "Assigned To",
       render: (_, row) => row.assignedCounselor || "Unassigned",
-    }
+    },
   ];
 
   const counselorColumns = [
@@ -247,23 +303,18 @@ const ChurchAdminDashboard = () => {
     {
       key: "createdAt",
       label: "Created",
-      render: (value) =>
-        value ? new Date(value).toLocaleDateString() : "N/A",
+      render: (value) => (value ? new Date(value).toLocaleDateString() : "N/A"),
     },
     {
       key: "participants",
       label: "Participants",
       render: (participants = []) =>
-        participants
-          .map((p) => `${p.firstName} ${p.lastName}`)
-          .join(" & "),
+        participants.map((p) => `${p.firstName} ${p.lastName}`).join(" & "),
     },
   ];
 
-
   return (
     <DashboardLayout sidebar={sidebar}>
-     
       {loading && activeTab === "overview" ? (
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center mb-20">
@@ -272,96 +323,97 @@ const ChurchAdminDashboard = () => {
           </div>
         </div>
       ) : (
-        activeTab === "overview" && dashboard && (
-        <div className="space-y-6">
-          <h1 className="text-3xl font-bold text-gray-900">
-            {isHigherRoleViewer
-              ? `Viewing Church Admin ${dashboard?.churchAdmin?.name || ""}'s Dashboard`
-              : `${dashboard.church?.name} Dashboard`}
-          </h1>
+        activeTab === "overview" &&
+        dashboard && (
+          <div className="space-y-6">
+            <h1 className="text-3xl font-bold text-gray-900">
+              {isHigherRoleViewer
+                ? `Viewing Church Admin ${dashboard?.churchAdmin?.name || ""}'s Dashboard`
+                : `${dashboard.church?.name} Dashboard`}
+            </h1>
 
-          <Card title="Church Information">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <p className="text-gray-600">Name</p>
-                <p className="font-semibold">{dashboard.church?.name}</p>
+            <Card title="Church Information">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div>
+                  <p className="text-gray-600">Name</p>
+                  <p className="font-semibold">{dashboard.church?.name}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600">Email</p>
+                  <p className="font-semibold">{dashboard.church?.email}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600">Phone</p>
+                  <p className="font-semibold">{dashboard.church?.phone}</p>
+                </div>
+                <div>
+                  <p className="text-gray-600">Status</p>
+                  <p className="font-semibold">{dashboard.church?.status}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-gray-600">Email</p>
-                <p className="font-semibold">{dashboard.church?.email}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Phone</p>
-                <p className="font-semibold">{dashboard.church?.phone}</p>
-              </div>
-              <div>
-                <p className="text-gray-600">Status</p>
-                <p className="font-semibold">{dashboard.church?.status}</p>
-              </div>
+            </Card>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-8 gap-6">
+              <StatCard
+                label="Total Members"
+                value={dashboard.stats?.totalMembers || 0}
+                icon={<Users className="w-8 h-8" />}
+                color="blue"
+              />
+              <StatCard
+                label="Verified Members"
+                value={dashboard.stats?.verifiedMembers || 0}
+                icon={<CircleCheckBig className="w-8 h-8" />}
+                color="green"
+              />
+              <StatCard
+                label="Pending"
+                value={dashboard.stats?.pendingVerification || 0}
+                icon={<Clock3 className="w-8 h-8" />}
+                color="yellow"
+              />
+              <StatCard
+                label="Unverified"
+                value={dashboard.stats?.unverifiedMembers || 0}
+                icon={<CircleHelp className="w-8 h-8" />}
+                color="yellow"
+              />
+              <StatCard
+                label="Rejected"
+                value={dashboard.stats?.rejectedMembers || 0}
+                icon={<XCircle className="w-8 h-8" />}
+                color="red"
+              />
+              <StatCard
+                label="Counselors"
+                value={dashboard.stats?.totalCounselors || 0}
+                icon={<UserCheck className="w-8 h-8" />}
+                color="blue"
+              />
+              <StatCard
+                label="Total Matches"
+                value={dashboard.stats?.totalMatches || 0}
+                icon={<Users className="w-8 h-8" />}
+                color="blue"
+              />
+              <StatCard
+                label="Active Matches"
+                value={dashboard.stats?.activeMatches || 0}
+                icon={<Users className="w-8 h-8" />}
+                color="green"
+              />
             </div>
-          </Card>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-8 gap-6">
-            <StatCard
-              label="Total Members"
-              value={dashboard.stats?.totalMembers || 0}
-              icon={<Users className="w-8 h-8" />}
-              color="blue"
-            />
-            <StatCard
-              label="Verified Members"
-              value={dashboard.stats?.verifiedMembers || 0}
-              icon={<CircleCheckBig className="w-8 h-8" />}
-              color="green"
-            />
-            <StatCard
-              label="Pending"
-              value={dashboard.stats?.pendingVerification || 0}
-              icon={<Clock3 className="w-8 h-8" />}
-              color="yellow"
-            />
-            <StatCard
-              label="Unverified"
-              value={dashboard.stats?.unverifiedMembers || 0}
-              icon={<CircleHelp className="w-8 h-8" />}
-              color="yellow"
-            />
-            <StatCard
-              label="Rejected"
-              value={dashboard.stats?.rejectedMembers || 0}
-              icon={<XCircle className="w-8 h-8" />}
-              color="red"
-            />
-            <StatCard
-              label="Counselors"
-              value={dashboard.stats?.totalCounselors || 0}
-              icon={<UserCheck className="w-8 h-8" />}
-              color="blue"
-            />
-            <StatCard
-              label="Total Matches"
-              value={dashboard.stats?.totalMatches || 0}
-              icon={<Users className="w-8 h-8" />}
-              color="blue"
-            />
-            <StatCard
-              label="Active Matches"
-              value={dashboard.stats?.activeMatches || 0}
-              icon={<Users className="w-8 h-8" />}
-              color="green"
-            />
+            <Card title="Recent Members" subtitle="Latest members joined">
+              <Table
+                columns={recentMemberColumns}
+                data={dashboard.recentMembers || []}
+                loading={loading}
+              />
+            </Card>
           </div>
-
-          <Card title="Recent Members" subtitle="Latest members joined">
-            <Table
-              columns={recentMemberColumns}
-              data={dashboard.recentMembers || []}
-              loading={loading}
-            />
-          </Card>
-        </div>
-      ))}
-      
+        )
+      )}
 
       {activeTab === "members" && (
         <div className="space-y-6">
@@ -453,11 +505,7 @@ const ChurchAdminDashboard = () => {
             />
           </div>
           <Card title="Recent Matches" subtitle="Latest match activity">
-            <Table
-              columns={matchColumns}
-              data={matches}
-              loading={loading}
-            />
+            <Table columns={matchColumns} data={matches} loading={loading} />
           </Card>
         </div>
       )}
@@ -605,7 +653,8 @@ const ChurchAdminDashboard = () => {
             !members.find((m) => m.accountId === matchForm.primaryAccountId)
               ?.gender && (
               <p className="text-sm text-red-600">
-                Selected member has no gender on record. Update their profile first.
+                Selected member has no gender on record. Update their profile
+                first.
               </p>
             )}
         </form>

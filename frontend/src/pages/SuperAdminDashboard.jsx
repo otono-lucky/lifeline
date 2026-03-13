@@ -1,14 +1,17 @@
 import React, { useState } from "react";
 import { DashboardLayout } from "../features/dashboard/components/DashboardLayout";
-import { Card, StatCard, Table, Button, Modal, Toast, ActionMenu } from "../components";
+import {
+  Card,
+  StatCard,
+  Table,
+  Button,
+  Modal,
+  Toast,
+  ActionMenu,
+} from "../components";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import CreateCounsellorModal from "../features/dashboard/components/CreateCounsellorModal";
-import {
-  Building2,
-  CircleCheckBig,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
+import { Building2, CircleCheckBig, ShieldCheck, Users } from "lucide-react";
 import {
   useAdminChurchAdminsQuery,
   useAdminCounselorsQuery,
@@ -18,7 +21,10 @@ import {
   useSuperAdminOverviewQuery,
   useAdminChurchesQuery,
 } from "../api/queries/admin";
-import { useCreateManualMatchMutation, useMatchesQuery } from "../api/queries/matching";
+import {
+  useCreateManualMatchMutation,
+  useMatchesQuery,
+} from "../api/queries/matching";
 import {
   useActivateChurchMutation,
   useCreateChurchMutation,
@@ -81,7 +87,8 @@ const SuperAdminDashboard = () => {
     {
       enabled: activeTab === "users" || showCreateMatch,
       staleTime: 1000 * 60 * 2,
-      onError: () => setToast({ type: "error", message: "Failed to fetch users" }),
+      onError: () =>
+        setToast({ type: "error", message: "Failed to fetch users" }),
     },
   );
 
@@ -105,7 +112,10 @@ const SuperAdminDashboard = () => {
     },
   );
 
-  const matchesQuery = useMatchesQuery(
+  const 
+  
+  
+  matchesQuery = useMatchesQuery(
     { limit: 10 },
     {
       enabled: activeTab === "matches",
@@ -173,12 +183,15 @@ const SuperAdminDashboard = () => {
     createChurchMutation.isPending ||
     activateChurchMutation.isPending;
   const usersLoading =
-    usersQuery.isLoading || usersQuery.isFetching || verifyUserMutation.isPending;
+    usersQuery.isLoading ||
+    usersQuery.isFetching ||
+    verifyUserMutation.isPending;
   const adminsLoading =
     churchAdminsQuery.isLoading ||
     churchAdminsQuery.isFetching ||
     createChurchAdminMutation.isPending;
-  const counselorsLoading = counselorsQuery.isLoading || counselorsQuery.isFetching;
+  const counselorsLoading =
+    counselorsQuery.isLoading || counselorsQuery.isFetching;
   const matchesLoading = matchesQuery.isLoading || matchesQuery.isFetching;
 
   const overviewError = overviewQuery.isError;
@@ -241,7 +254,10 @@ const SuperAdminDashboard = () => {
       return;
     }
     try {
-      const response = await verifyUserMutation.mutateAsync({ accountId, isVerified });
+      const response = await verifyUserMutation.mutateAsync({
+        accountId,
+        isVerified,
+      });
       if (response.success) {
         setToast({ type: "success", message: "User updated successfully!" });
       }
@@ -298,7 +314,7 @@ const SuperAdminDashboard = () => {
 
   const sidebar = (
     <nav className="space-y-2 flex flex-col">
-      {[ 
+      {[
         { id: "overview", label: "Dashboard" },
         { id: "churches", label: "Manage Churches" },
         { id: "users", label: "Manage Users" },
@@ -329,10 +345,27 @@ const SuperAdminDashboard = () => {
   ];
 
   const userColumns = [
+    // {
+    //   key: "accountId",
+    //   label: "ID",
+    //   render: (accountId) => accountId?.substring(0, 8),
+    // },
     {
-      key: "accountId",
-      label: "ID",
-      render: (accountId) => accountId?.substring(0, 8),
+      key: "profilePictureUrl",
+      label: "Image",
+      render: (_, row) =>
+        row.profilePictureUrl ? (
+          <img
+            src={row.profilePictureUrl}
+            alt=""
+            className="w-8 h-8 rounded-full"
+          />
+        ) : (
+          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500">
+            {row.firstName?.[0]}
+            {row.lastName?.[0]}
+          </div>
+        ),
     },
     {
       key: "firstName",
@@ -340,7 +373,20 @@ const SuperAdminDashboard = () => {
       render: (_, row) => `${row.firstName} ${row.lastName}`,
     },
     { key: "email", label: "Email", render: (_, row) => row.email },
-    { key: "verificationStatus", label: "Verification" },
+    {
+      key: "gender",
+      label: "Gender",
+      render: (_, row) => (row.gender ? row.gender : "N/A"),
+    },
+    {
+      key: "age",
+      label: "Age",
+      render: (_, row) => (row.age ? row.age : "N/A"),
+    },
+    {
+      key: "verificationStatus",
+      label: "Verification Status",
+    },
   ];
 
   const adminColumns = [
@@ -391,16 +437,13 @@ const SuperAdminDashboard = () => {
     {
       key: "createdAt",
       label: "Created",
-      render: (value) =>
-        value ? new Date(value).toLocaleDateString() : "N/A",
+      render: (value) => (value ? new Date(value).toLocaleDateString() : "N/A"),
     },
     {
       key: "participants",
-      label: "Participants",
+      label: "Male Participants",
       render: (participants = []) =>
-        participants
-          .map((p) => `${p.firstName} ${p.lastName}`)
-          .join(" & "),
+        participants.map((p) => `${p.firstName} ${p.lastName}`).join(" & "),
     },
   ];
 
@@ -408,7 +451,9 @@ const SuperAdminDashboard = () => {
     <DashboardLayout sidebar={sidebar}>
       {activeTab === "overview" && (
         <div className="space-y-6">
-          <h1 className="text-3xl font-bold text-gray-900">Super Admin Dashboard</h1>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Super Admin Dashboard
+          </h1>
           {overviewError && (
             <Card>
               <p className="text-red-600">Failed to load overview data.</p>
@@ -457,11 +502,19 @@ const SuperAdminDashboard = () => {
           )}
 
           <Card title="Recent Churches" subtitle="Latest churches created">
-            <Table columns={churchColumns} data={overviewData.churches.slice(0, 5)} loading={overviewLoading} />
+            <Table
+              columns={churchColumns}
+              data={overviewData.churches.slice(0, 5)}
+              loading={overviewLoading}
+            />
           </Card>
 
           <Card title="Recent Users" subtitle="Latest user signups">
-            <Table columns={userColumns} data={overviewData.users.slice(0, 5)} loading={overviewLoading} />
+            <Table
+              columns={userColumns}
+              data={overviewData.users.slice(0, 5)}
+              loading={overviewLoading}
+            />
           </Card>
         </div>
       )}
@@ -469,8 +522,12 @@ const SuperAdminDashboard = () => {
       {activeTab === "churches" && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h1 className="text-3xl font-bold text-gray-900">Manage Churches</h1>
-            <Button onClick={() => setShowCreateChurch(true)}>Create Church</Button>
+            <h1 className="text-3xl font-bold text-gray-900">
+              Manage Churches
+            </h1>
+            <Button onClick={() => setShowCreateChurch(true)}>
+              Create Church
+            </Button>
           </div>
 
           {churchesError && (
@@ -487,7 +544,8 @@ const SuperAdminDashboard = () => {
                 <ActionMenu
                   items={[
                     {
-                      label: row.status === "active" ? "Deactivate" : "Activate",
+                      label:
+                        row.status === "active" ? "Deactivate" : "Activate",
                       onClick: () =>
                         handleVerifyChurch(
                           row.id,
@@ -546,7 +604,9 @@ const SuperAdminDashboard = () => {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Church Admins</h1>
-            <Button onClick={() => setShowCreateAdmin(true)}>Create Church Admin</Button>
+            <Button onClick={() => setShowCreateAdmin(true)}>
+              Create Church Admin
+            </Button>
           </div>
 
           {adminsError && (
@@ -579,7 +639,9 @@ const SuperAdminDashboard = () => {
         <div className="space-y-6">
           <div className="flex items-center justify-between">
             <h1 className="text-3xl font-bold text-gray-900">Counselors</h1>
-            <Button onClick={() => setShowCreateCounselor(true)}>Create Counsellor</Button>
+            <Button onClick={() => setShowCreateCounselor(true)}>
+              Create Counsellor
+            </Button>
           </div>
 
           {counselorsError && (
@@ -646,10 +708,16 @@ const SuperAdminDashboard = () => {
         size="lg"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowCreateChurch(false)}>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateChurch(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleCreateChurch} disabled={createChurchMutation.isPending}>
+            <Button
+              onClick={handleCreateChurch}
+              disabled={createChurchMutation.isPending}
+            >
               Create
             </Button>
           </>
@@ -671,14 +739,18 @@ const SuperAdminDashboard = () => {
             placeholder="Also Known As"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={churchForm.aka}
-            onChange={(e) => setChurchForm({ ...churchForm, aka: e.target.value })}
+            onChange={(e) =>
+              setChurchForm({ ...churchForm, aka: e.target.value })
+            }
           />
           <input
             type="email"
             placeholder="Email"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={churchForm.email}
-            onChange={(e) => setChurchForm({ ...churchForm, email: e.target.value })}
+            onChange={(e) =>
+              setChurchForm({ ...churchForm, email: e.target.value })
+            }
             required
           />
           <input
@@ -686,7 +758,9 @@ const SuperAdminDashboard = () => {
             placeholder="Phone"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={churchForm.phone}
-            onChange={(e) => setChurchForm({ ...churchForm, phone: e.target.value })}
+            onChange={(e) =>
+              setChurchForm({ ...churchForm, phone: e.target.value })
+            }
             required
           />
           <input
@@ -694,7 +768,9 @@ const SuperAdminDashboard = () => {
             placeholder="State"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={churchForm.state}
-            onChange={(e) => setChurchForm({ ...churchForm, state: e.target.value })}
+            onChange={(e) =>
+              setChurchForm({ ...churchForm, state: e.target.value })
+            }
             required
           />
           <input
@@ -702,14 +778,18 @@ const SuperAdminDashboard = () => {
             placeholder="LGA"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={churchForm.lga}
-            onChange={(e) => setChurchForm({ ...churchForm, lga: e.target.value })}
+            onChange={(e) =>
+              setChurchForm({ ...churchForm, lga: e.target.value })
+            }
           />
           <input
             type="text"
             placeholder="City"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={churchForm.city}
-            onChange={(e) => setChurchForm({ ...churchForm, city: e.target.value })}
+            onChange={(e) =>
+              setChurchForm({ ...churchForm, city: e.target.value })
+            }
           />
           <input
             type="text"
@@ -730,10 +810,16 @@ const SuperAdminDashboard = () => {
         size="lg"
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowCreateAdmin(false)}>
+            <Button
+              variant="secondary"
+              onClick={() => setShowCreateAdmin(false)}
+            >
               Cancel
             </Button>
-            <Button onClick={handleCreateAdmin} disabled={createChurchAdminMutation.isPending}>
+            <Button
+              onClick={handleCreateAdmin}
+              disabled={createChurchAdminMutation.isPending}
+            >
               Create
             </Button>
           </>
@@ -743,7 +829,9 @@ const SuperAdminDashboard = () => {
           <select
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={adminForm.churchId}
-            onChange={(e) => setAdminForm({ ...adminForm, churchId: e.target.value })}
+            onChange={(e) =>
+              setAdminForm({ ...adminForm, churchId: e.target.value })
+            }
             required
           >
             <option value="">Select Church</option>
@@ -758,7 +846,9 @@ const SuperAdminDashboard = () => {
             placeholder="First Name"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={adminForm.firstName}
-            onChange={(e) => setAdminForm({ ...adminForm, firstName: e.target.value })}
+            onChange={(e) =>
+              setAdminForm({ ...adminForm, firstName: e.target.value })
+            }
             required
           />
           <input
@@ -766,7 +856,9 @@ const SuperAdminDashboard = () => {
             placeholder="Last Name"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={adminForm.lastName}
-            onChange={(e) => setAdminForm({ ...adminForm, lastName: e.target.value })}
+            onChange={(e) =>
+              setAdminForm({ ...adminForm, lastName: e.target.value })
+            }
             required
           />
           <input
@@ -774,7 +866,9 @@ const SuperAdminDashboard = () => {
             placeholder="Email"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={adminForm.email}
-            onChange={(e) => setAdminForm({ ...adminForm, email: e.target.value })}
+            onChange={(e) =>
+              setAdminForm({ ...adminForm, email: e.target.value })
+            }
             required
           />
           <input
@@ -782,14 +876,18 @@ const SuperAdminDashboard = () => {
             placeholder="Phone"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={adminForm.phone}
-            onChange={(e) => setAdminForm({ ...adminForm, phone: e.target.value })}
+            onChange={(e) =>
+              setAdminForm({ ...adminForm, phone: e.target.value })
+            }
           />
           <input
             type="password"
             placeholder="Password"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={adminForm.password}
-            onChange={(e) => setAdminForm({ ...adminForm, password: e.target.value })}
+            onChange={(e) =>
+              setAdminForm({ ...adminForm, password: e.target.value })
+            }
             required
           />
         </form>
@@ -874,9 +972,11 @@ const SuperAdminDashboard = () => {
               ))}
           </select>
           {matchForm.primaryAccountId &&
-            !users.find((u) => u.accountId === matchForm.primaryAccountId)?.gender && (
+            !users.find((u) => u.accountId === matchForm.primaryAccountId)
+              ?.gender && (
               <p className="text-sm text-red-600">
-                Selected user has no gender on record. Update their profile first.
+                Selected user has no gender on record. Update their profile
+                first.
               </p>
             )}
         </form>
@@ -891,7 +991,11 @@ const SuperAdminDashboard = () => {
       />
 
       {toast && (
-        <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
       )}
     </DashboardLayout>
   );
