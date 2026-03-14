@@ -18,7 +18,7 @@ const toInt = (value: string, fallback: number) => {
 
 const env = {
   nodeEnv: process.env.NODE_ENV || "development",
-  clientUrl: process.env.FRONTEND_URL || "http://localhost:5173",
+  clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
   port: toInt(process.env.PORT, 5000),
   jwtSecret: requiredEnv("JWT_SECRET"),
   databaseUrl: requiredEnv("DATABASE_URL"),

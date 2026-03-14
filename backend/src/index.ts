@@ -6,8 +6,14 @@ import env from "./config/env";
 const app = express();
 const PORT = env.port;
 
+const corsOptions = {
+  origin: env.clientUrl,
+  credentials: true, // if you need cookies or auth headers
+};
+
 // Middleware
-app.use(cors());
+app.use(cors(corsOptions));
+
 app.use(express.json());
 
 // Routes

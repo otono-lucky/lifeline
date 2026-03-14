@@ -785,8 +785,7 @@ export const listMatches = async (filters?: {
               select: {
                 gender: true,
                 dateOfBirth: true,
-              },
-              include: {
+                profilePictureUrl: true,
                 account: {
                   select: {
                     id: true,
@@ -817,6 +816,7 @@ export const listMatches = async (filters?: {
         lastName: participant.user.account.lastName,
         gender: participant.user.gender,
         age: calculateAge(participant.user.dateOfBirth),
+        profilePictureUrl: participant.user.profilePictureUrl,
         decision: participant.decision,
       })),
     })),
