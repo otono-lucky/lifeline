@@ -112,10 +112,7 @@ const SuperAdminDashboard = () => {
     },
   );
 
-  const 
-  
-  
-  matchesQuery = useMatchesQuery(
+  const matchesQuery = useMatchesQuery(
     { limit: 10 },
     {
       enabled: activeTab === "matches",
@@ -428,22 +425,56 @@ const SuperAdminDashboard = () => {
   ];
 
   const matchColumns = [
+    // {
+    //   key: "id",
+    //   label: "Match ID",
+    //   render: (id) => id?.substring(0, 8),
+    // },
     {
-      key: "id",
-      label: "Match ID",
-      render: (id) => id?.substring(0, 8),
+      key: "participants",
+      label: "Images",
+      render: (participants = []) => (
+        <div className="relative flex">
+          {participants.length > 0 &&
+            participants.map((row) =>
+              row.profilePictureUrl ? (
+                <img
+                  key={row.gender}
+                  src={row.profilePictureUrl}
+                  alt=""
+                  className={`w-8 h-8 rounded-full absolute ${row.gender === "Male" ? "-left-1 -top-4" : "left-6 -top-4"}`}
+                />
+              ) : (
+                <div key={row.gender} className={`flex items-center absolute ${row.gender === "Male" ? "-left-1 -top-4" : "left-6 -top-4"} justify-center w-8 h-8 rounded-full text-white bg-gray-500`}>
+                  {row.firstName?.[0]}
+                  {row.lastName?.[0]}
+                </div>
+              ),
+            )}
+        </div>
+      ),
+    },
+    {
+      key: "participants",
+      label: "Male",
+      render: (participants = []) => {
+        const maleUser = participants.find((p) => p.gender === "Male");
+        return maleUser.firstName + " " + maleUser.lastName;
+      },
+    },
+    {
+      key: "participants",
+      label: "Female",
+      render: (participants = []) => {
+        const femaleUser = participants.find((p) => p.gender === "Female");
+        return femaleUser.firstName + " " + femaleUser.lastName;
+      },
     },
     { key: "status", label: "Status" },
     {
       key: "createdAt",
       label: "Created",
       render: (value) => (value ? new Date(value).toLocaleDateString() : "N/A"),
-    },
-    {
-      key: "participants",
-      label: "Male Participants",
-      render: (participants = []) =>
-        participants.map((p) => `${p.firstName} ${p.lastName}`).join(" & "),
     },
   ];
 
