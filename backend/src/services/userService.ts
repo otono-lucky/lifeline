@@ -3,7 +3,11 @@
 
 import { MatchPreferenceType, VerificationStatus } from "@prisma/client";
 import { prisma } from "../config/db";
-import { findRandomCounselorId, getMatchingEligibility } from "./matchingService";
+import {
+  findRandomCounselorId,
+  getMatchingEligibility,
+  getProfileCompletionStatus,
+} from "./matchingService";
 import { calculateAge } from "../utils/ageUtils";
 
 export const SOCIAL_PLATFORM_OPTIONS = [
@@ -246,10 +250,35 @@ export const updateUser = async (
 ) => {
   const resolvedUser = await resolveUserByIdentifier(userId);
 
+  const isNonEmptyString = (value?: string | null) =>
+    typeof value === "string" && value.trim().length > 0;
+  const isNonEmptyArray = (value?: any) =>
+    Array.isArray(value) && value.length > 0;
+
+  const cleanedData: typeof data = {};
+
+  if (isNonEmptyString(data.originCountry)) cleanedData.originCountry = data.originCountry?.trim();
+  if (isNonEmptyString(data.originState)) cleanedData.originState = data.originState?.trim();
+  if (isNonEmptyString(data.originLga)) cleanedData.originLga = data.originLga?.trim();
+  if (isNonEmptyString(data.residenceCountry)) cleanedData.residenceCountry = data.residenceCountry?.trim();
+  if (isNonEmptyString(data.residenceState)) cleanedData.residenceState = data.residenceState?.trim();
+  if (isNonEmptyString(data.residenceCity)) cleanedData.residenceCity = data.residenceCity?.trim();
+  if (isNonEmptyString(data.residenceAddress)) cleanedData.residenceAddress = data.residenceAddress?.trim();
+  if (isNonEmptyString(data.occupation)) cleanedData.occupation = data.occupation?.trim();
+  if (isNonEmptyString(data.churchId)) cleanedData.churchId = data.churchId?.trim();
+  if (isNonEmptyString(data.videoIntroUrl)) cleanedData.videoIntroUrl = data.videoIntroUrl?.trim();
+  if (data.matchPreference) cleanedData.matchPreference = data.matchPreference;
+  if (data.dateOfBirth) cleanedData.dateOfBirth = data.dateOfBirth;
+  if (isNonEmptyArray(data.interests)) cleanedData.interests = data.interests;
+
+  if (Object.keys(cleanedData).length === 0) {
+    throw new Error("No valid fields to update");
+  }
+
   const user = await prisma.user.update({
     where: { id: resolvedUser.id },
     data: {
-      ...data,
+      ...cleanedData,
     },
   });
 
@@ -310,6 +339,42 @@ export const updateUserVerification = async (
   isVerified: boolean
 ) => {
   const resolvedUser = await resolveUserByIdentifier(userId);
+
+  if (isVerified) {
+    const userForVerification = await prisma.user.findUnique({
+      where: { id: resolvedUser.id },
+      select: {
+        profilePictureUrl: true,
+        videoIntroUrl: true,
+        occupation: true,
+        interests: true,
+        matchPreference: true,
+        dateOfBirth: true,
+        gender: true,
+        originCountry: true,
+        originState: true,
+        originLga: true,
+        residenceCountry: true,
+        residenceState: true,
+        residenceCity: true,
+        residenceAddress: true,
+        socialMediaHandles: {
+          select: { id: true },
+        },
+      },
+    });
+
+    if (!userForVerification) {
+      throw new Error("User not found");
+    }
+
+    const verificationReadiness = getProfileCompletionStatus(userForVerification);
+    if (!verificationReadiness.isComplete) {
+      throw new Error(
+        `User profile is incomplete: ${verificationReadiness.reasons.join(", ")}`,
+      );
+    }
+  }
 
   const user = await prisma.user.update({
     where: { id: resolvedUser.id },

@@ -1,4 +1,4 @@
-import { MatchDecision, MatchStatus } from "@prisma/client";
+import { MatchDecision, MatchPreferenceType, MatchStatus } from "@prisma/client";
 import { prisma } from "../config/db";
 import {calculateAge} from "../utils/ageUtils"
 
@@ -73,22 +73,102 @@ const hasActiveMatch = async (userId: string) => {
   return Boolean(active);
 };
 
-const getEligibilityFromUser = (user: {
-  isVerified: boolean;
+const MIN_SOCIALS = 2;
+const MAX_SOCIALS = 4;
+const MIN_INTERESTS = 3;
+
+const isNonEmptyString = (value?: string | null) =>
+  typeof value === "string" && value.trim().length > 0;
+
+const getInterestsCount = (value: unknown) =>
+  Array.isArray(value) ? value.length : 0;
+
+const getProfileCompletionReasons = (user: {
   socialMediaHandles: Array<{ id: string }>;
+  profilePictureUrl?: string | null;
+  videoIntroUrl?: string | null;
+  occupation?: string | null;
+  interests?: unknown;
+  matchPreference?: MatchPreferenceType | null;
+  dateOfBirth?: Date | null;
+  gender?: string | null;
+  originCountry?: string | null;
+  originState?: string | null;
+  originLga?: string | null;
+  residenceCountry?: string | null;
+  residenceState?: string | null;
+  residenceCity?: string | null;
+  residenceAddress?: string | null;
 }) => {
   const handleCount = user.socialMediaHandles.length;
+  const interestsCount = getInterestsCount(user.interests);
+
+  return [
+    ...(isNonEmptyString(user.profilePictureUrl)
+      ? []
+      : ["Profile picture is required"]),
+    ...(isNonEmptyString(user.videoIntroUrl)
+      ? []
+      : ["Video introduction is required"]),
+    ...(isNonEmptyString(user.occupation) ? [] : ["Occupation is required"]),
+    ...(user.matchPreference ? [] : ["Match preference is required"]),
+    ...(user.dateOfBirth ? [] : ["Date of birth is required"]),
+    ...(user.gender ? [] : ["Gender is required"]),
+    ...(interestsCount >= MIN_INTERESTS
+      ? []
+      : [`At least ${MIN_INTERESTS} interests are required`]),
+    ...(isNonEmptyString(user.originCountry) &&
+    isNonEmptyString(user.originState) &&
+    isNonEmptyString(user.originLga)
+      ? []
+      : ["Origin location is required"]),
+    ...(isNonEmptyString(user.residenceCountry) &&
+    isNonEmptyString(user.residenceState) &&
+    isNonEmptyString(user.residenceCity) &&
+    isNonEmptyString(user.residenceAddress)
+      ? []
+      : ["Residence location is required"]),
+    ...(handleCount >= MIN_SOCIALS
+      ? []
+      : [`User must have at least ${MIN_SOCIALS} social media handles`]),
+    ...(handleCount <= MAX_SOCIALS
+      ? []
+      : [`User cannot have more than ${MAX_SOCIALS} social media handles`]),
+  ];
+};
+
+export const getProfileCompletionStatus = (user: {
+  socialMediaHandles: Array<{ id: string }>;
+  profilePictureUrl?: string | null;
+  videoIntroUrl?: string | null;
+  occupation?: string | null;
+  interests?: unknown;
+  matchPreference?: MatchPreferenceType | null;
+  dateOfBirth?: Date | null;
+  gender?: string | null;
+  originCountry?: string | null;
+  originState?: string | null;
+  originLga?: string | null;
+  residenceCountry?: string | null;
+  residenceState?: string | null;
+  residenceCity?: string | null;
+  residenceAddress?: string | null;
+}) => {
+  const reasons = getProfileCompletionReasons(user);
   return {
-    isEligible: user.isVerified ,
-    reasons: [
-      ...(user.isVerified ? [] : ["User must be verified by a counselor"]),
-      ...(handleCount < 2
-        ? ["User must have at least 2 social media handles"]
-        : []),
-      ...(handleCount > 4
-        ? ["User cannot have more than 4 social media handles"]
-        : []),
-    ],
+    isComplete: reasons.length === 0,
+    reasons,
+  };
+};
+
+const getEligibilityFromUser = (user: { isVerified: boolean }) => {
+  const reasons = user.isVerified
+    ? []
+    : ["User must be verified by a counselor or admin"];
+
+  return {
+    isEligible: reasons.length === 0,
+    reasons,
   };
 };
 
@@ -117,9 +197,6 @@ export const getMatchingEligibility = async (accountId: string) => {
     select: {
       id: true,
       isVerified: true,
-      socialMediaHandles: {
-        select: { id: true },
-      },
       matchParticipations: {
         where: {
           match: {

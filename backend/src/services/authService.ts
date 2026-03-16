@@ -81,6 +81,7 @@ export const verifyEmail = async (token: string) => {
     where: { id: account.id },
     data: {
       isEmailVerified: true,
+      status: "active",
       emailVerificationToken: null,
       emailVerificationExpiry: null,
       emailVerificationLastSentAt: null,

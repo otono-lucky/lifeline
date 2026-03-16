@@ -49,6 +49,7 @@ enum StatusType {
   pending
   active
   suspended
+  deleted
 }
 
 enum VerificationStatus {
@@ -96,7 +97,7 @@ model Account {
   passwordResetToken  String?   @unique
   passwordResetExpiry DateTime?
 
-  status    StatusType @default(active)
+  status    StatusType @default(pending)
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
 

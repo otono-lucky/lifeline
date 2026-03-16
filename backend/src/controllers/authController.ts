@@ -91,6 +91,8 @@ export const signup = async (req: Request, res: Response) => {
         firstName: true,
         role: true,
         isEmailVerified: true,
+        status: true,
+        createdAt: true,
       },
     });
 
@@ -137,7 +139,7 @@ export const login = async (req: Request, res: Response) => {
       console.error(
         "[POST /api/auth/login] Failed: Invalid credentials - account not found",
       );
-      return res.status(400).json(errorResponse("Invalid credentials"));
+      return res.status(400).json(errorResponse("Invalid email or password"));
     }
 
     // Check password
@@ -146,7 +148,7 @@ export const login = async (req: Request, res: Response) => {
       console.error(
         "[POST /api/auth/login] Failed: Invalid credentials - password mismatch",
       );
-      return res.status(400).json(errorResponse("Invalid credentials"));
+      return res.status(400).json(errorResponse("Invalid email or password"));
     }
 
     // Check if account is suspended
@@ -201,7 +203,7 @@ export const login = async (req: Request, res: Response) => {
     console.error("[POST /api/auth/login] Failed:", error.message);
     res
       .status(500)
-      .json(errorResponse(error.message || "Server error during login"));
+      .json(errorResponse("Server error during login"));
   }
 };
 
