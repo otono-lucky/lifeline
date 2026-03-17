@@ -1,4 +1,6 @@
 import nodemailer from "nodemailer";
+import dns from "dns";
+import type SMTPTransport from "nodemailer/lib/smtp-transport";
 import env from "../config/env";
 
 export interface SendEmailOptions {
@@ -6,6 +8,11 @@ export interface SendEmailOptions {
   subject: string;
   html?: string;
   text?: string;
+}
+
+// Prefer IPv4 results to avoid IPv6-only network issues in production.
+if (typeof dns.setDefaultResultOrder === "function") {
+  dns.setDefaultResultOrder("ipv4first");
 }
 
 const transporter = nodemailer.createTransport({
