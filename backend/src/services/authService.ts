@@ -31,6 +31,7 @@ export const createUserAccountWithVerification = async (input: {
 }) => {
   const startedAt = Date.now();
   console.log("[authService] Creating account");
+  
   const newAccount = await prisma.account.create({
     data: {
       firstName: input.firstName,
@@ -341,17 +342,24 @@ export const resendVerificationEmail = async (email: string) => {
   }
 
   const now = new Date();
+  const cooldownMs = 2 * 60 * 1000;
 
   // Cooldown: 2 minutes
   if (account.emailVerificationLastSentAt) {
     const diffMs =
       now.getTime() - account.emailVerificationLastSentAt.getTime();
-    const diffMinutes = diffMs / (1000 * 60);
 
-    if (diffMinutes < 2) {
-      throw new Error(
-        "Please wait before requesting another verification email.",
+    if (diffMs < cooldownMs) {
+      const remainingMs = cooldownMs - diffMs;
+      const remainingSeconds = Math.ceil(remainingMs / 1000);
+      const minutes = Math.floor(remainingSeconds / 60);
+      const seconds = remainingSeconds % 60;
+      const human = minutes > 0 ? `${minutes}m ${seconds}s` : `${seconds}s`;
+      const error: any = new Error(
+        `Please wait ${human} before requesting another verification email.`,
       );
+      error.retryAfterSeconds = remainingSeconds;
+      throw error;
     }
   }
 

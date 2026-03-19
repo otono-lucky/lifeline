@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authService } from "../../../api/services";
 import { Toast } from "../../../components/Toast";
@@ -12,8 +12,18 @@ const ResendVerificationForm = ({ initialEmail = "", onPreviewReady }) => {
   });
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const isEmailValid = /\S+@\S+\.\S+/.test(email);
   const needsEmailInput = !isEmailValid;
+  const isCoolingDown = cooldownSeconds > 0;
+
+  useEffect(() => {
+    if (!isCoolingDown) return;
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => Math.max(prev - 1, 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [isCoolingDown]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -51,6 +61,7 @@ const ResendVerificationForm = ({ initialEmail = "", onPreviewReady }) => {
             "Open Verification Link",
           );
         }
+        setCooldownSeconds(120);
         navigate("/verify-email", { replace: true });
       } else {
         setToast({
@@ -63,6 +74,11 @@ const ResendVerificationForm = ({ initialEmail = "", onPreviewReady }) => {
         error?.response?.data?.message ||
         error?.message ||
         "Failed to send verification email";
+      const retryAfterSeconds =
+        error?.response?.data?.errors?.retryAfterSeconds;
+      if (retryAfterSeconds) {
+        setCooldownSeconds(retryAfterSeconds);
+      }
       setToast({ type: "error", message });
       console.error("Request verification error:", error);
     } finally {
@@ -96,19 +112,23 @@ const ResendVerificationForm = ({ initialEmail = "", onPreviewReady }) => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="your-email@example.com"
-              disabled={loading}
+              disabled={loading || isCoolingDown}
               className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
               required
             />
           }
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || isCoolingDown}
             className={`w-full py-2 px-3 text-sm rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors ${
-              loading ? "opacity-70 cursor-not-allowed" : ""
+              loading || isCoolingDown ? "opacity-70 cursor-not-allowed" : ""
             }`}
           >
-            {loading ? "Sending..." : "Resend Verification Link"}
+            {loading
+              ? "Sending..."
+              : isCoolingDown
+                ? `Try again in ${cooldownSeconds}s`
+                : "Resend Verification Link"}
           </button>
         </form>
       </div>

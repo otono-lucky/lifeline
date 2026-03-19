@@ -254,13 +254,18 @@ export const requestVerification = async (req: Request, res: Response) => {
       "[POST /api/auth/request-verification] Failed:",
       error.message,
     );
-    res
-      .status(500)
-      .json(
-        errorResponse(
-          error.message || "Server error sending verification email",
-        ),
+    if (error?.retryAfterSeconds) {
+      return res.status(429).json(
+        errorResponse(error.message, {
+          retryAfterSeconds: error.retryAfterSeconds,
+        }),
       );
+    }
+    res.status(500).json(
+      errorResponse(
+        error.message || "Server error sending verification email",
+      ),
+    );
   }
 };
 
