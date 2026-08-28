@@ -19,6 +19,8 @@ export const profileImageUpload = multer({
   fileFilter: imageFileFilter,
 });
 
+export const uploadSingle = profileImageUpload.single("image");
+
 export const handleUploadError = (err, _req, res, next) => {
   if (!err) return next();
 

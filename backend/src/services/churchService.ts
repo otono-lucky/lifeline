@@ -1,12 +1,13 @@
-// services/church.service.ts
+// services/churchService.ts
 // Church resource management
 
-import { StatusType } from "@prisma/client";
+import { ChurchModelType, StatusType } from "@prisma/client";
 import { prisma } from "../config/db";
 
 interface CreateChurchData {
   officialName: string;
   aka?: string;
+  churchModel?: ChurchModelType;
   email: string;
   phone: string;
   state: string;
@@ -20,7 +21,6 @@ interface CreateChurchData {
  * Create a new church
  */
 export const createChurch = async (data: CreateChurchData) => {
-  // Check if church email exists
   const existingChurch = await prisma.church.findUnique({
     where: { email: data.email },
   });
@@ -29,18 +29,18 @@ export const createChurch = async (data: CreateChurchData) => {
     throw new Error("Church with this email already exists");
   }
 
-  // Create church
   const church = await prisma.church.create({
     data: {
       officialName: data.officialName,
       aka: data.aka,
+      churchModel: data.churchModel || "INDIVIDUAL_PARISH",
       email: data.email,
       phone: data.phone,
       state: data.state,
       lga: data.lga,
       city: data.city,
       address: data.address,
-      status: "pending", // Pending until admin is assigned
+      status: "pending",
       createdBy: data.createdBy,
     },
   });
@@ -53,6 +53,7 @@ export const createChurch = async (data: CreateChurchData) => {
  */
 export const getChurches = async (filters?: {
   status?: string;
+  churchModel?: ChurchModelType;
   page?: number;
   limit?: number;
 }) => {
@@ -60,7 +61,9 @@ export const getChurches = async (filters?: {
   const limit = filters?.limit || 20;
   const skip = (page - 1) * limit;
 
-  const where = filters?.status ? { status: filters.status as StatusType } : {};
+  const where: any = {};
+  if (filters?.status) where.status = filters.status as StatusType;
+  if (filters?.churchModel) where.churchModel = filters.churchModel;
 
   const [churches, total] = await Promise.all([
     prisma.church.findMany({
@@ -69,7 +72,7 @@ export const getChurches = async (filters?: {
       take: limit,
       orderBy: { createdAt: "desc" },
       include: {
-        churchAdmins: {
+        churchAdmin: {
           include: {
             account: {
               select: {
@@ -125,6 +128,7 @@ export const getPublicChurches = async (options?: { limit?: number }) => {
       id: true,
       officialName: true,
       aka: true,
+      churchModel: true,
       state: true,
       lga: true,
       city: true,
@@ -132,11 +136,11 @@ export const getPublicChurches = async (options?: { limit?: number }) => {
     },
   });
 
-  // Format to ensure consistent shape
   return churches.map((c) => ({
     id: c.id,
     officialName: c.officialName,
     aka: c.aka,
+    churchModel: c.churchModel,
     address: {
       state: c.state,
       lga: c.lga,
@@ -153,7 +157,7 @@ export const getChurchById = async (churchId: string) => {
   const church = await prisma.church.findUnique({
     where: { id: churchId },
     include: {
-      churchAdmins: {
+      churchAdmin: {
         include: {
           account: {
             select: {
@@ -192,26 +196,25 @@ export const getChurchById = async (churchId: string) => {
 };
 
 /**
- * Get all members of a church
+ * Get all members of a church with Privacy Firewall for Church Admin
  */
 export const getChurchMembers = async (
   requesterId: string,
   options?: {
     churchId?: string;
-    verificationStatus?: string;
+    vettingStatus?: string;
     page?: number;
     limit?: number;
   },
 ) => {
-  // Get admin
-  const { churchId, verificationStatus, page = 1, limit = 20 } = options;
+  const { churchId, vettingStatus, page = 1, limit = 20 } = options || {};
   const skip = (page - 1) * limit;
 
   const targetChurchId = await resolveChurchScope(requesterId, churchId);
 
   const where: any = { churchId: targetChurchId };
-  if (verificationStatus) {
-    where.verificationStatus = verificationStatus;
+  if (vettingStatus) {
+    where.vettingStatus = vettingStatus;
   }
 
   const [members, total] = await Promise.all([
@@ -243,6 +246,10 @@ export const getChurchMembers = async (
             },
           },
         },
+        photos: {
+          where: { order: 1 },
+          select: { url: true },
+        },
       },
     }),
     prisma.user.count({ where }),
@@ -256,9 +263,10 @@ export const getChurchMembers = async (
       email: m.account.email,
       phone: m.account.phone,
       gender: m.gender,
-      verificationStatus: m.verificationStatus,
-      verificationNotes: m.verificationNotes,
-      verifiedAt: m.verifiedAt,
+      vettingStatus: m.vettingStatus,
+      isVerified: m.isVerified,
+      photoUrl: m.photos[0]?.url || m.profilePictureUrl || null,
+      branchName: m.branchName,
       assignedCounselor: m.assignedCounselor
         ? {
             accountId: m.assignedCounselor.account.id,
@@ -289,6 +297,7 @@ export const updateChurch = async (
     data: {
       officialName: data.officialName,
       aka: data.aka,
+      churchModel: data.churchModel,
       phone: data.phone,
       state: data.state,
       lga: data.lga,
@@ -311,9 +320,6 @@ export const updateChurchStatus = async (churchId: string, status: string) => {
   return church;
 };
 
-/**
- * Activate church (when first admin is assigned)
- */
 export const activateChurch = async (churchId: string) => {
   const church = await prisma.church.update({
     where: { id: churchId },
@@ -325,7 +331,7 @@ export const activateChurch = async (churchId: string) => {
 
 export const resolveChurchScope = async (
   requesterId: string,
-  requestedChurchId?: string
+  requestedChurchId?: string,
 ): Promise<string> => {
   const requester = await prisma.account.findUnique({
     where: { id: requesterId },
@@ -334,7 +340,6 @@ export const resolveChurchScope = async (
 
   if (!requester) throw new Error("Requester not found");
 
-  // Super admin → must specify which church they want to view
   if (requester.superAdmin) {
     if (!requestedChurchId) {
       throw new Error("Super admin must provide a churchId");
@@ -342,7 +347,6 @@ export const resolveChurchScope = async (
     return requestedChurchId;
   }
 
-  // Church admin → always restricted to their own church
   if (requester.churchAdmin) {
     const ownChurchId = requester.churchAdmin.churchId;
 
@@ -353,6 +357,5 @@ export const resolveChurchScope = async (
     return ownChurchId;
   }
 
-  // No other roles allowed
   throw new Error("Unauthorized role for church-scoped data");
 };

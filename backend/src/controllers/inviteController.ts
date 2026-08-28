@@ -507,7 +507,7 @@ export const getChurches = async (req, res) => {
         take: limitNumber,
         orderBy: { createdAt: "desc" },
         include: {
-          churchAdmins: {
+          churchAdmin: {
             include: {
               account: {
                 select: {

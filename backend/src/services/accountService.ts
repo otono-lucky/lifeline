@@ -1,7 +1,6 @@
-// services/account.service.ts
+// services/accountService.ts
 // Account resource management (creation, auth, etc.)
 
-import bcrypt from "bcryptjs";
 import { prisma } from "../config/db";
 import { activateChurch } from "./churchService";
 import { hashPassword } from "../utils/passwordHasher";
@@ -18,6 +17,7 @@ interface CreateAccountData {
 interface CreateChurchAdminData extends CreateAccountData {
   role: "ChurchAdmin";
   churchId: string;
+  title?: string; // Optional: Pastor, Reverend, Priest, Bishop, Elder
 }
 
 interface CreateCounselorData extends CreateAccountData {
@@ -31,25 +31,22 @@ interface CreateCounselorData extends CreateAccountData {
  * Create a new account (generic - works for any role)
  */
 export const createAccount = async (data: CreateAccountData) => {
-  // Check if email exists
   const existingAccount = await prisma.account.findUnique({
-    where: { email: data.email },
+    where: { email: data.email.toLowerCase().trim() },
   });
 
   if (existingAccount) {
     throw new Error("Account with this email already exists");
   }
 
-  // Hash password
   const hashedPassword = await hashPassword(data.password);
 
-  // Create account
   const account = await prisma.account.create({
     data: {
-      email: data.email,
+      email: data.email.toLowerCase().trim(),
       password: hashedPassword,
-      firstName: data.firstName,
-      lastName: data.lastName,
+      firstName: data.firstName.trim(),
+      lastName: data.lastName.trim(),
       phone: data.phone,
       role: data.role,
       status: "active",
@@ -61,47 +58,39 @@ export const createAccount = async (data: CreateAccountData) => {
 };
 
 /**
- * Create ChurchAdmin account + profile
+ * Create ChurchAdmin account + profile (1:1 with Church)
  */
 export const createChurchAdmin = async (data: CreateChurchAdminData) => {
-  // Verify church exists
   const church = await prisma.church.findUnique({
     where: { id: data.churchId },
+    include: { churchAdmin: true },
   });
 
   if (!church) {
     throw new Error("Church not found");
   }
 
-  // Check if church already has an admin
-  const existingAdminCount = await prisma.churchAdmin.count({
-    where: { churchId: data.churchId },
-  });
-
-  if (existingAdminCount >= 3) {
+  if (church.churchAdmin) {
     throw new Error(
-      "Church already has a maximum of 3 admin allowed for each church",
+      "This church already has an assigned Church Admin. Exactly 1 Church Admin per church is allowed (1:1 relationship).",
     );
   }
 
-  // Create account + church admin profile in transaction
   const result = await prisma.$transaction(async (tx) => {
-    // Create account
     const account = await createAccount(data);
 
-    // Create church admin profile
     const churchAdmin = await tx.churchAdmin.create({
       data: {
         accountId: account.id,
         churchId: data.churchId,
+        title: data.title || null,
       },
     });
 
     return { account, churchAdmin };
   });
 
-  // Activate church
-  if (existingAdminCount === 0) {
+  if (church.status === "pending") {
     await activateChurch(data.churchId);
   }
 
@@ -112,7 +101,6 @@ export const createChurchAdmin = async (data: CreateChurchAdminData) => {
  * Create Counselor account + profile
  */
 export const createCounselor = async (data: CreateCounselorData) => {
-  // Verify church exists
   const church = await prisma.church.findUnique({
     where: { id: data.churchId },
   });
@@ -121,12 +109,9 @@ export const createCounselor = async (data: CreateCounselorData) => {
     throw new Error("Church not found");
   }
 
-  // Create account + counselor profile in transaction
   const result = await prisma.$transaction(async (tx) => {
-    // Create account
     const account = await createAccount(data);
 
-    // Create counselor profile (no status field - uses account.status)
     const counselor = await tx.counselor.create({
       data: {
         accountId: account.id,
@@ -142,32 +127,11 @@ export const createCounselor = async (data: CreateCounselorData) => {
 };
 
 /**
- * Get account by email
- */
-export const getAccountByEmail = async (email: string) => {
-  const account = await prisma.account.findUnique({
-    where: { email },
-    include: {
-      superAdmin: true,
-      churchAdmin: {
-        include: { church: true },
-      },
-      counselor: {
-        include: { church: true },
-      },
-      user: true,
-    },
-  });
-
-  return account;
-};
-
-/**
- * Update account status (for suspending/activating any role)
+ * Update account status
  */
 export const updateAccountStatus = async (
   accountId: string,
-  status: "active" | "suspended",
+  status: "pending" | "active" | "suspended" | "deleted",
 ) => {
   const account = await prisma.account.update({
     where: { id: accountId },
@@ -175,4 +139,37 @@ export const updateAccountStatus = async (
   });
 
   return account;
+};
+
+/**
+ * Change password
+ */
+export const changePassword = async (
+  accountId: string,
+  currentPassword: string,
+  newPassword: string,
+) => {
+  const account = await prisma.account.findUnique({
+    where: { id: accountId },
+  });
+
+  if (!account || !account.password) {
+    throw new Error("Account not found or password not set");
+  }
+
+  const bcrypt = await import("bcryptjs");
+  const isMatch = await bcrypt.compare(currentPassword, account.password);
+
+  if (!isMatch) {
+    throw new Error("Current password is incorrect");
+  }
+
+  const hashedPassword = await hashPassword(newPassword);
+
+  await prisma.account.update({
+    where: { id: accountId },
+    data: { password: hashedPassword },
+  });
+
+  return { message: "Password changed successfully" };
 };

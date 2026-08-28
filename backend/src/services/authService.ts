@@ -1,5 +1,5 @@
-// services/auth.service.ts
-// Authentication service
+// services/authService.ts
+// Authentication & Lead Retention Service
 
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
@@ -8,6 +8,125 @@ import { sendEmail, sendTestEmail } from "../services/emailService";
 import env from "../config/env";
 import { Account, GenderType, MatchPreferenceType } from "@prisma/client";
 
+/**
+ * Step 1 Lead Capture (Strategic Onboarding & Lead Retention Framework)
+ */
+export const registerLead = async (input: {
+  email: string;
+  phone?: string;
+  firstName: string;
+  lastName: string;
+  password?: string;
+  authProvider?: string;
+  authProviderId?: string;
+  gender?: string;
+}) => {
+  const existing = await prisma.account.findUnique({
+    where: { email: input.email.toLowerCase().trim() },
+  });
+
+  if (existing) {
+    throw new Error("An account with this email already exists");
+  }
+
+  let hashedPassword: string | null = null;
+  if (input.password) {
+    const salt = await bcrypt.genSalt(10);
+    hashedPassword = await bcrypt.hash(input.password, salt);
+  }
+
+  const account = await prisma.account.create({
+    data: {
+      email: input.email.toLowerCase().trim(),
+      phone: input.phone || null,
+      firstName: input.firstName.trim(),
+      lastName: input.lastName.trim(),
+      password: hashedPassword,
+      authProvider: input.authProvider || "local",
+      authProviderId: input.authProviderId || null,
+      role: "User",
+      isEmailVerified: input.authProvider ? true : false,
+      status: "pending",
+      user: {
+        create: {
+          gender: (input.gender as GenderType) || "Male",
+          onboardingStep: 1,
+          profileCompletionPercentage: 10,
+          vettingStatus: "DRAFT",
+          isDiscoveryIndexed: false,
+        },
+      },
+    },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      status: true,
+      isEmailVerified: true,
+      createdAt: true,
+    },
+  });
+
+  return account;
+};
+
+/**
+ * Social Auth One-Click Integration (Google, Apple, etc.)
+ */
+export const handleSocialAuth = async (input: {
+  provider: string;
+  providerId: string;
+  email: string;
+  firstName: string;
+  lastName: string;
+  gender?: string;
+}) => {
+  let account = await prisma.account.findUnique({
+    where: { email: input.email.toLowerCase().trim() },
+    include: { user: true },
+  });
+
+  if (!account) {
+    // Auto-create lead account
+    account = await prisma.account.create({
+      data: {
+        email: input.email.toLowerCase().trim(),
+        firstName: input.firstName,
+        lastName: input.lastName,
+        authProvider: input.provider,
+        authProviderId: input.providerId,
+        role: "User",
+        isEmailVerified: true,
+        status: "active",
+        user: {
+          create: {
+            gender: (input.gender as GenderType) || "Male",
+            onboardingStep: 1,
+            profileCompletionPercentage: 15,
+            vettingStatus: "DRAFT",
+            isDiscoveryIndexed: false,
+          },
+        },
+      },
+      include: { user: true },
+    });
+  } else if (!account.authProviderId) {
+    // Link social provider to existing account
+    account = await prisma.account.update({
+      where: { id: account.id },
+      data: {
+        authProvider: input.provider,
+        authProviderId: input.providerId,
+        isEmailVerified: true,
+      },
+      include: { user: true },
+    });
+  }
+
+  return account;
+};
 
 export const createUserAccountWithVerification = async (input: {
   firstName: string;
@@ -28,15 +147,17 @@ export const createUserAccountWithVerification = async (input: {
   interests: string[];
   churchId: string;
   matchPreference: string;
+  branchName?: string;
+  whatsappNumber?: string;
 }) => {
   const startedAt = Date.now();
   console.log("[authService] Creating account");
-  
+
   const newAccount = await prisma.account.create({
     data: {
       firstName: input.firstName,
       lastName: input.lastName,
-      email: input.email,
+      email: input.email.toLowerCase().trim(),
       phone: input.phone,
       password: input.hashedPassword,
       role: "User",
@@ -57,7 +178,11 @@ export const createUserAccountWithVerification = async (input: {
           occupation: input.occupation,
           interests: input.interests,
           churchId: input.churchId,
+          branchName: input.branchName,
+          whatsappNumber: input.whatsappNumber || input.phone,
           matchPreference: input.matchPreference as MatchPreferenceType,
+          vettingStatus: "DRAFT",
+          profileCompletionPercentage: 50,
         },
       },
     },
@@ -106,7 +231,6 @@ export const createUserAccountWithVerification = async (input: {
 
 /**
  * Request email verification
- * Generates token and sends verification email
  */
 export const requestEmailVerification = async (
   partialAccount: Partial<Account>,
@@ -173,7 +297,6 @@ export const requestEmailVerification = async (
   };
 };
 
-
 /**
  * Verify email with token
  */
@@ -220,7 +343,6 @@ export const verifyEmail = async (token: string) => {
 
 /**
  * Request password reset
- * Generates token and sends reset email
  */
 export const requestPasswordReset = async (email: string) => {
   const account = await prisma.account.findUnique({
@@ -228,18 +350,15 @@ export const requestPasswordReset = async (email: string) => {
   });
 
   if (!account) {
-    // Don't reveal if email exists or not (security)
     return {
       message: "If an account exists, a password reset link has been sent",
     };
   }
 
-  // Generate reset token
   const token = crypto.randomBytes(32).toString("hex");
   const expiry = new Date();
   expiry.setMinutes(expiry.getMinutes() + 15); // 15 minutes
 
-  // Update account with token
   await prisma.account.update({
     where: { id: account.id },
     data: {
@@ -248,7 +367,6 @@ export const requestPasswordReset = async (email: string) => {
     },
   });
 
-  // Send reset email
   const resetUrl = `${env.clientUrl}/reset-password?token=${token}`;
   const emailHtml = `
       <h2>Password Reset Request</h2>
@@ -301,16 +419,13 @@ export const resetPassword = async (token: string, newPassword: string) => {
     throw new Error("Invalid reset token");
   }
 
-  // Check if token expired
   if (account.passwordResetExpiry && new Date() > account.passwordResetExpiry) {
     throw new Error("Reset token has expired");
   }
 
-  // Hash new password
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(newPassword, salt);
 
-  // Update password and clear reset token
   await prisma.account.update({
     where: { id: account.id },
     data: {
@@ -344,7 +459,6 @@ export const resendVerificationEmail = async (email: string) => {
   const now = new Date();
   const cooldownMs = 2 * 60 * 1000;
 
-  // Cooldown: 2 minutes
   if (account.emailVerificationLastSentAt) {
     const diffMs =
       now.getTime() - account.emailVerificationLastSentAt.getTime();
@@ -363,6 +477,5 @@ export const resendVerificationEmail = async (email: string) => {
     }
   }
 
-  // Reuse the requestEmailVerification function
   return await requestEmailVerification(account);
 };

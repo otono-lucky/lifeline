@@ -7,6 +7,7 @@ import {
   assignUserToCounselor,
   getChurchAdmins,
   getChurchAdminById,
+  updateChurchAdmin,
 } from "../services/churchAdminService";
 import { createChurchAdmin } from "../services/accountService";
 import { generateToken } from "../utils/tokenManager";
@@ -16,23 +17,16 @@ import { Params } from "../types/express";
 /**
  * @desc    Get ChurchAdmin dashboard
  * @route   GET /api/church-admin/dashboard
- * @access  ChurchAdmin
+ * @access  ChurchAdmin, SuperAdmin
  */
 export const getDashboard = async (req: Request, res: Response) => {
-  console.log(
-    "[ChurchAdminController] getDashboard - ChurchAdminId:",
-    req.account?.id,
-  );
   try {
     const dashboard = await getChurchAdminDashboard(
       req.account.id,
       req.params?.id as string | undefined,
     );
-    console.log("[GET /api/church-admin/dashboard] Success");
-
     res.json(successResponse("Dashboard data fetched successfully", dashboard));
   } catch (error: any) {
-    console.error("[GET /api/church-admin/dashboard] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching dashboard"));
@@ -45,12 +39,6 @@ export const getDashboard = async (req: Request, res: Response) => {
  * @access  ChurchAdmin
  */
 export const assignCounselor = async (req: Request, res: Response) => {
-  console.log(
-    "[ChurchAdminController] assignCounselor - UserId:",
-    req.body?.userId,
-    "CounselorId:",
-    req.body?.counselorId,
-  );
   try {
     const { userId, counselorId } = req.body;
 
@@ -65,19 +53,11 @@ export const assignCounselor = async (req: Request, res: Response) => {
       userId,
       counselorId,
     );
-    console.log(
-      "[POST /api/church-admin/assign-counselor] Success - UserId:",
-      userId,
-    );
 
     res.json(
       successResponse("User assigned to counselor successfully", result),
     );
   } catch (error: any) {
-    console.error(
-      "[POST /api/church-admin/assign-counselor] Failed:",
-      error.message,
-    );
     res
       .status(400)
       .json(errorResponse(error.message || "Server error assigning counselor"));
@@ -85,24 +65,15 @@ export const assignCounselor = async (req: Request, res: Response) => {
 };
 
 /**
- * @desc    Create church admin account
+ * @desc    Create church admin account (1:1 with Church + optional title)
  * @route   POST /api/church-admin/create
  * @access  SuperAdmin
  */
 export const createChurchAdminAccount = async (req: Request, res: Response) => {
-  console.log(
-    "[ChurchAdminController] createChurchAdminAccount - ChurchId:",
-    req.body?.churchId,
-    "Email:",
-    req.body?.email,
-  );
   try {
-    const { churchId, email, password, firstName, lastName, phone } = req.body;
+    const { churchId, email, password, firstName, lastName, phone, title } = req.body;
 
     if (!churchId || !email || !password || !firstName || !lastName) {
-      console.error(
-        "[POST /api/church-admin/create-account] Failed: Missing required fields",
-      );
       return res.status(400).json(
         errorResponse("Missing required fields", {
           required: ["churchId", "email", "password", "firstName", "lastName"],
@@ -117,20 +88,16 @@ export const createChurchAdminAccount = async (req: Request, res: Response) => {
       firstName,
       lastName,
       phone,
+      title,
       role: "ChurchAdmin",
     });
 
-    // Generate login token
     const token = generateToken({
       id: result.account.id,
       email: result.account.email,
       role: result.account.role,
       firstName: result.account.firstName,
     });
-    console.log(
-      "[POST /api/church-admin/create] Success - ChurchAdminId:",
-      result.account.id,
-    );
 
     res.status(201).json(
       successResponse("Church admin account created successfully", {
@@ -144,12 +111,12 @@ export const createChurchAdminAccount = async (req: Request, res: Response) => {
         churchAdmin: {
           accountId: result.account.id,
           churchId: result.churchAdmin.churchId,
+          title: result.churchAdmin.title,
         },
         token,
       }),
     );
   } catch (error: any) {
-    console.error("[POST /api/church-admin/create] Failed:", error.message);
     res
       .status(500)
       .json(
@@ -160,11 +127,10 @@ export const createChurchAdminAccount = async (req: Request, res: Response) => {
 
 /**
  * @desc    List all church admins
- * @route   GET /api/church-admins
+ * @route   GET /api/church-admin
  * @access  SuperAdmin
  */
 export const listChurchAdmins = async (req: Request, res: Response) => {
-  console.log("[GET /api/church-admins] Starting");
   try {
     const { status, churchId, page, limit } = req.query;
 
@@ -174,10 +140,6 @@ export const listChurchAdmins = async (req: Request, res: Response) => {
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });
-    console.log(
-      "[GET /api/church-admins] Success - Count:",
-      result.churchAdmins.length,
-    );
 
     res.json(
       successResponse(
@@ -187,7 +149,6 @@ export const listChurchAdmins = async (req: Request, res: Response) => {
       ),
     );
   } catch (error: any) {
-    console.error("[GET /api/church-admins] Failed:", error.message);
     res
       .status(500)
       .json(
@@ -198,40 +159,48 @@ export const listChurchAdmins = async (req: Request, res: Response) => {
 
 /**
  * @desc    Get church admin details
- * @route   GET /api/church-admins/:id
- * @access  SuperAdmin
+ * @route   GET /api/church-admin/:id
+ * @access  SuperAdmin, ChurchAdmin
  */
 export const getChurchAdminDetails = async (
   req: Request<Params>,
   res: Response,
 ) => {
-  console.log(
-    "[ChurchAdminController] getChurchAdminDetails - Id:",
-    req.params?.id,
-  );
   try {
     const { id } = req.params;
-
     const churchAdmin = await getChurchAdminById(id);
-    console.log(
-      "[GET /api/church-admins/:id] Success - AccountId:",
-      churchAdmin.accountId,
-    );
 
     res.json(
       successResponse("Church admin fetched successfully", { churchAdmin }),
     );
   } catch (error: any) {
-    console.error("[GET /api/church-admins/:id] Failed:", error.message);
-
     if (error.message === "Church admin not found") {
       return res.status(404).json(errorResponse(error.message));
     }
-
     res
       .status(500)
       .json(
         errorResponse(error.message || "Server error fetching church admin"),
       );
+  }
+};
+
+/**
+ * @desc    Update ChurchAdmin title or profile
+ * @route   PUT /api/church-admin/:id
+ * @access  ChurchAdmin, SuperAdmin
+ */
+export const updateChurchAdminProfile = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const id = req.params.id as string;
+    const { title } = req.body;
+
+    const result = await updateChurchAdmin(id, { title });
+    res.json(successResponse("Church admin profile updated", result));
+  } catch (error: any) {
+    res.status(500).json(errorResponse(error.message || "Failed to update church admin"));
   }
 };

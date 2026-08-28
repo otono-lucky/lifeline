@@ -1,8 +1,19 @@
-import express from "express";
-import * as subscriptionController from "../controllers/subscriptionController";
-import authenticate from "../middleware/authMiddleware";
+// routes/subscriptionRoutes.ts
 
+import express from "express";
+import {
+  cancelSubscription,
+  getSubscriptionStatus,
+  subscribe,
+} from "../controllers/subscriptionController";
+import authMiddleware from "../middleware/authMiddleware";
 
 const router = express.Router();
 
-router.put("/subscription", authenticate, subscriptionController.updateSubscription);
+router.use(authMiddleware);
+
+router.get("/status", getSubscriptionStatus);
+router.post("/subscribe", subscribe);
+router.post("/cancel", cancelSubscription);
+
+export default router;

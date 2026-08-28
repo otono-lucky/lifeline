@@ -1,98 +1,57 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// app/index.tsx
+// Central Navigation Guard & Gatekeeper State Machine (§3–4)
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import React, { useEffect } from "react";
+import { View, ActivityIndicator, Text } from "react-native";
+import { useRouter } from "expo-router";
+import { useAuth } from "../context/AuthContext";
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+export default function IndexDispatcher() {
+  const router = useRouter();
+  const { isLoading, isAuthenticated, isProfileComplete, vettingStatus } = useAuth();
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (!isAuthenticated) {
+      // 1. Unauthenticated -> Send to Step 1 Lead Registration / Login
+      router.replace("/(auth)/lead-register" as any);
+      return;
+    }
+
+    // 2. Authenticated -> Check 100% Profile Completion Gate
+    if (!isProfileComplete) {
+      router.replace("/(onboarding)/church-selection" as any);
+      return;
+    }
+
+    // 3. 100% Complete -> Evaluate Vetting State Machine
+    switch (vettingStatus) {
+      case "PENDING_VETTING":
+        router.replace("/(vetting)/pending" as any);
+        break;
+      case "REJECTED":
+        router.replace("/(vetting)/rejected" as any);
+        break;
+      case "HARD_BLOCKED":
+        router.replace("/(vetting)/blocked" as any);
+        break;
+      case "DEBRIEF_REQUIRED":
+        router.replace("/(vetting)/debrief" as any);
+        break;
+      case "VETTED_ACTIVE":
+      default:
+        router.replace("/(app)/(tabs)/discovery" as any);
+        break;
+    }
+  }, [isLoading, isAuthenticated, isProfileComplete, vettingStatus]);
+
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
+    <View className="flex-1 items-center justify-center bg-indigo-950 px-6">
+      <ActivityIndicator size="large" color="#93C5FD" />
+      <Text className="mt-4 text-center text-sm font-semibold text-indigo-200">
+        Loading Lifeline...
+      </Text>
+    </View>
   );
 }
-
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
-
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
-
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
-  );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
-  },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
-  },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
-});

@@ -9,6 +9,11 @@ import counselorRoutes from "./counsellorRoutes";
 import userRoutes from "./userRoutes";
 import adminRoutes from "./adminRoutes";
 import matchingRoutes from "./matchingRoutes";
+import discoveryRoutes from "./discoveryRoutes";
+import requestRoutes from "./requestRoutes";
+import vettingRoutes from "./vettingRoutes";
+import communicationRoutes from "./communicationRoutes";
+import subscriptionRoutes from "./subscriptionRoutes";
 
 const router = express.Router();
 
@@ -20,5 +25,10 @@ router.use("/counselor", counselorRoutes);
 router.use("/users", userRoutes);
 router.use("/admin", adminRoutes);
 router.use("/matches", matchingRoutes);
+router.use("/discovery", discoveryRoutes);
+router.use("/requests", requestRoutes);
+router.use("/vetting", vettingRoutes);
+router.use("/communications", communicationRoutes);
+router.use("/subscriptions", subscriptionRoutes);
 
 export default router;
