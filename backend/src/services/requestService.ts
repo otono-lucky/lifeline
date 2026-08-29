@@ -1,5 +1,6 @@
 import { prisma } from "../config/db";
 import { MAX_ACTIVE_REQUEST_SLOTS } from "../constants";
+import { sendEmail } from "./emailService";
 
 export const sendMatchRequest = async (
   senderAccountId: string,
@@ -135,15 +136,19 @@ export const getSentMatchRequests = async (accountId: string) => {
       id: r.id,
       status: r.status,
       createdAt: r.createdAt,
-      receiver: {
-        userId: r.receiver.id,
-        firstName: r.receiver.account.firstName,
-        lastNameInitial: r.receiver.account.lastName
-          ? r.receiver.account.lastName.charAt(0) + "."
-          : "",
-        photoUrl: r.receiver.photos[0]?.url || null,
-        church: r.receiver.church?.officialName || null,
-      },
+      // Blind rejection: never reveal receiver identity on non-active requests
+      receiver:
+        r.status === "PENDING" || r.status === "ACCEPTED"
+          ? {
+              userId: r.receiver.id,
+              firstName: r.receiver.account.firstName,
+              lastNameInitial: r.receiver.account.lastName
+                ? r.receiver.account.lastName.charAt(0) + "."
+                : "",
+              photoUrl: r.receiver.photos[0]?.url || null,
+              church: r.receiver.church?.officialName || null,
+            }
+          : null,
     })),
   };
 };
@@ -232,7 +237,34 @@ export const declineMatchRequest = async (
     },
   });
 
-  // Note: System sends blind notification to sender: "You have 1 slot available"
+  // Blind notification: tell sender a slot freed up without revealing who declined
+  const requestWithSender = await prisma.matchRequest.findUnique({
+    where: { id: requestId },
+    include: {
+      sender: {
+        include: {
+          sentRequests: { where: { status: "PENDING" } },
+          account: { select: { email: true, firstName: true } },
+        },
+      },
+    },
+  });
+
+  if (requestWithSender?.sender?.account?.email) {
+    const slotsRemaining =
+      MAX_ACTIVE_REQUEST_SLOTS - requestWithSender.sender.sentRequests.length;
+    sendEmail({
+      to: requestWithSender.sender.account.email,
+      subject: "Lifeline — A request slot is now available",
+      html: `<p>Hi ${requestWithSender.sender.account.firstName},</p>
+<p>One of your match requests has been resolved and you now have <strong>${slotsRemaining} slot${slotsRemaining !== 1 ? "s" : ""}</strong> available.</p>
+<p>Head back to the app to explore new connections.</p>
+<p>— The Lifeline Team</p>`,
+    }).catch((err) =>
+      console.error("[requestService] Blind decline email failed:", err?.message),
+    );
+  }
+
   return {
     success: true,
     message: "Request declined",
@@ -329,8 +361,8 @@ export const acceptMatchRequest = async (
     // 3. Create MatchParticipants
     await tx.matchParticipant.createMany({
       data: [
-        { matchId: match.id, userId: sender.id, decision: "ACCEPTED" },
-        { matchId: match.id, userId: receiver.id, decision: "ACCEPTED" },
+        { matchId: match.id, userId: sender.id },
+        { matchId: match.id, userId: receiver.id },
       ],
     });
 

@@ -1,18 +1,10 @@
-import { MatchDecision, MatchPreferenceType, MatchStatus } from "@prisma/client";
+import { MatchPreferenceType, MatchStatus } from "@prisma/client";
 import { prisma } from "../config/db";
 import {calculateAge} from "../utils/ageUtils"
 
 const ACTIVE_MATCH_STATUSES: MatchStatus[] = [
-  "AWAITING_DECISIONS",
-  "WAITING_FOR_OTHER",
-  "MUTUAL_ACCEPTED",
   "IN_CONVERSATION",
   "COURTSHIP",
-];
-
-const DECISION_OPEN_STATUSES: MatchStatus[] = [
-  "AWAITING_DECISIONS",
-  "WAITING_FOR_OTHER",
 ];
 
 const ELEVATED_ROLES = ["SuperAdmin", "ChurchAdmin", "Counselor"] as const;
@@ -172,24 +164,6 @@ const getEligibilityFromUser = (user: { isVerified: boolean }) => {
   };
 };
 
-const deriveMatchStatus = (
-  decisions: MatchDecision[],
-  currentStatus: MatchStatus,
-): MatchStatus => {
-  if (decisions.some((d) => d === "DECLINED")) {
-    return "DECLINED";
-  }
-  if (decisions.every((d) => d === "ACCEPTED")) {
-    return "MUTUAL_ACCEPTED";
-  }
-  if (decisions.some((d) => d === "ACCEPTED") && decisions.includes("PENDING")) {
-    return "WAITING_FOR_OTHER";
-  }
-  if (decisions.every((d) => d === "PENDING")) {
-    return "AWAITING_DECISIONS";
-  }
-  return currentStatus;
-};
 
 export const getMatchingEligibility = async (accountId: string) => {
   const user = await prisma.user.findUnique({
@@ -278,15 +252,15 @@ export const createManualMatch = async (
   const match = await prisma.$transaction(async (tx) => {
     const createdMatch = await tx.match.create({
       data: {
-        status: "AWAITING_DECISIONS",
+        status: "IN_CONVERSATION",
         counselorId: requester.counselor?.id ?? null,
       },
     });
 
     await tx.matchParticipant.createMany({
       data: [
-        { matchId: createdMatch.id, userId: maleUser.id, decision: "PENDING" },
-        { matchId: createdMatch.id, userId: femaleUser.id, decision: "PENDING" },
+        { matchId: createdMatch.id, userId: maleUser.id },
+        { matchId: createdMatch.id, userId: femaleUser.id },
       ],
     });
 
@@ -376,13 +350,6 @@ export const getActiveMatchForUser = async (accountId: string) => {
     status: participant.match.status,
     createdAt: participant.match.createdAt,
     endedAt: participant.match.endedAt,
-    myDecision: participant.decision,
-    waitingForOther:
-      participant.match.status === "WAITING_FOR_OTHER" &&
-      participant.decision === "ACCEPTED",
-    canDecide:
-      DECISION_OPEN_STATUSES.includes(participant.match.status) &&
-      participant.decision === "PENDING",
     participant: otherParticipant
       ? {
           accountId: otherParticipant.user.account.id,
@@ -452,7 +419,6 @@ export const getMatchHistoryForUser = async (accountId: string) => {
       status: row.match.status,
       createdAt: row.match.createdAt,
       endedAt: row.match.endedAt,
-      myDecision: row.decision,
       participant: otherParticipant
         ? {
             accountId: otherParticipant.user.account.id,
@@ -550,7 +516,6 @@ export const getMatchById = async (
       age: calculateAge(participant.user.dateOfBirth),
       gender: participant.user.gender,
       profilePictureUrl: participant.user.profilePictureUrl,
-      decision: participant.decision,
       feedback: participant.feedback,
       notes: participant.notes,
       church: participant.user.church,
@@ -565,82 +530,6 @@ export const getMatchById = async (
   };
 };
 
-export const decideMatch = async (
-  accountId: string,
-  matchId: string,
-  decision: MatchDecision,
-  feedback?: string,
-) => {
-  if (decision === "DECLINED" && !feedback) {
-    throw new Error("Feedback is required when declining a match");
-  }
-
-  const user = await getUserByAccountId(accountId);
-
-  const existing = await prisma.matchParticipant.findFirst({
-    where: {
-      matchId,
-      userId: user.id,
-    },
-    include: {
-      match: true,
-    },
-  });
-
-  if (!existing) {
-    throw new Error("Match participant not found");
-  }
-
-  if (!DECISION_OPEN_STATUSES.includes(existing.match.status)) {
-    throw new Error("This match no longer accepts decisions");
-  }
-
-  if (existing.decision !== "PENDING") {
-    throw new Error("You have already submitted a decision for this match");
-  }
-
-  const result = await prisma.$transaction(async (tx) => {
-    await tx.matchParticipant.update({
-      where: { id: existing.id },
-      data: {
-        decision,
-        feedback: decision === "DECLINED" ? feedback : null,
-      },
-    });
-
-    const participants = await tx.matchParticipant.findMany({
-      where: { matchId },
-      select: {
-        decision: true,
-      },
-    });
-
-    const nextStatus = deriveMatchStatus(
-      participants.map((p) => p.decision),
-      existing.match.status,
-    );
-
-    const updatedMatch = await tx.match.update({
-      where: { id: matchId },
-      data: {
-        status: nextStatus,
-        endedAt:
-          nextStatus === "DECLINED" || nextStatus === "EXPIRED" || nextStatus === "MARRIED"
-            ? new Date()
-            : null,
-      },
-      select: {
-        id: true,
-        status: true,
-        endedAt: true,
-      },
-    });
-
-    return updatedMatch;
-  });
-
-  return result;
-};
 
 export const getMatchPublicProfile = async (
   viewerAccountId: string,
@@ -894,7 +783,6 @@ export const listMatches = async (filters?: {
         gender: participant.user.gender,
         age: calculateAge(participant.user.dateOfBirth),
         profilePictureUrl: participant.user.profilePictureUrl,
-        decision: participant.decision,
       })),
     })),
     pagination: {

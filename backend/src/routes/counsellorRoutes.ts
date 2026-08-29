@@ -5,7 +5,6 @@ import express from "express";
 import {
   getDashboard,
   getMyAssignedUsers,
-  verifyUserStatus,
   createCounselorAccount,
   list,
   getOne,
@@ -49,14 +48,6 @@ router.get(
   authMiddleware,
   requireCounselorOrHigher,
   getMyAssignedUsers,
-);
-
-// Verify user
-router.post(
-  "/verify-user/:userId",
-  authMiddleware,
-  requireCounselor,
-  verifyUserStatus
 );
 
 // Create counselor (Admins)

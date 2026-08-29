@@ -105,7 +105,13 @@ export const calculateProfileCompletion = (user: ProfileInputUser) => {
     },
     {
       name: "Introductory Video (< 1 minute)",
-      passed: isNonEmptyString(user.videoIntroUrl),
+      // If videoDurationSeconds is stored, enforce the <=60s rule.
+      // Fall back to URL presence only for legacy records without a stored duration.
+      passed: isNonEmptyString(user.videoIntroUrl)
+        ? user.videoDurationSeconds != null
+          ? user.videoDurationSeconds <= 60
+          : true
+        : false,
       weight: 10,
     },
     {

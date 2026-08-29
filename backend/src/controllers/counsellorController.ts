@@ -5,7 +5,6 @@ import { Request, Response } from "express";
 import {
   getCounselorDashboard,
   getAssignedUsers,
-  verifyUser,
   getCounselorById,
   updateCounselor,
   getCounselorsByChurch,
@@ -73,40 +72,7 @@ export const getMyAssignedUsers = async (
   }
 };
 
-/**
- * @desc    Verify or reject user
- * @route   POST /api/counselor/verify-user/:userId
- * @access  Counselor
- */
-export const verifyUserStatus = async (
-  req: Request<{ userId: string }>,
-  res: Response,
-) => {
-  try {
-    const { userId } = req.params;
-    const { status, notes } = req.body;
 
-    if (!status || !["verified", "rejected"].includes(status)) {
-      return res
-        .status(400)
-        .json(
-          errorResponse("Invalid status. Must be 'verified' or 'rejected'"),
-        );
-    }
-
-    const result = await verifyUser(req.account.id, userId, status, notes);
-    res.json(
-      successResponse(
-        `User ${status === "verified" ? "verified" : "rejected"} successfully`,
-        result,
-      ),
-    );
-  } catch (error: any) {
-    res
-      .status(400)
-      .json(errorResponse(error.message || "Server error verifying user"));
-  }
-};
 
 /**
  * @desc    Get single counselor by ID

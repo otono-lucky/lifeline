@@ -1,8 +1,6 @@
 import { Request, Response } from "express";
-import { MatchDecision } from "@prisma/client";
 import {
   createManualMatch,
-  decideMatch,
   getActiveMatchForUser,
   getMatchById,
   getMatchHistoryForUser,
@@ -10,6 +8,7 @@ import {
   getMatchPublicProfileForMatch,
   listMatches,
 } from "../services/matchingService";
+import { endRelationshipMatch } from "../services/debriefService";
 import { errorResponse, successResponse } from "../utils/responseHandler";
 
 export const create = async (req: Request, res: Response) => {
@@ -100,38 +99,25 @@ export const getHistoryForAccount = async (req: Request, res: Response) => {
   }
 };
 
-export const decide = async (req: Request, res: Response) => {
+export const endMatch = async (req: Request, res: Response) => {
   console.log(
-    "[POST /api/matches/:matchId/decision] Starting - Match:",
+    "[POST /api/matches/:matchId/end] Starting - Match:",
     req.params.matchId,
     "Account:",
     req.account?.id,
   );
   try {
     const matchId = String(req.params.matchId);
-    const decision = String(req.body?.decision) as MatchDecision;
-    const feedback = req.body?.feedback ? String(req.body.feedback) : undefined;
+    const { reason } = req.body;
 
-    if (!["ACCEPTED", "DECLINED"].includes(decision)) {
-      console.error(
-        "[POST /api/matches/:matchId/decision] Failed: Invalid decision",
-      );
-      return res
-        .status(400)
-        .json(errorResponse("decision must be ACCEPTED or DECLINED"));
-    }
-
-    const match = await decideMatch(req.account.id, matchId, decision, feedback);
-    console.log("[POST /api/matches/:matchId/decision] Success");
-    res.json(successResponse("Decision saved successfully", { match }));
+    const result = await endRelationshipMatch(req.account.id, matchId, reason);
+    console.log("[POST /api/matches/:matchId/end] Success");
+    res.json(successResponse(result.message, null));
   } catch (error: any) {
-    console.error(
-      "[POST /api/matches/:matchId/decision] Failed:",
-      error.message,
-    );
+    console.error("[POST /api/matches/:matchId/end] Failed:", error.message);
     res
       .status(400)
-      .json(errorResponse(error.message || "Server error saving decision"));
+      .json(errorResponse(error.message || "Server error ending match"));
   }
 };
 

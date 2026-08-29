@@ -9,15 +9,22 @@ export const requireRole = (allowedRoles: string[]) => {
   return (req, res, next) => {
     if (!req.account) {
       return res.status(401).json({
+        success: false,
         message: "Authentication required",
+        data: null,
+        errors: null,
       });
     }
 
     if (!allowedRoles.includes(req.account.role)) {
       return res.status(403).json({
+        success: false,
         message: "Access denied. Insufficient permissions.",
-        required: allowedRoles,
-        current: req.account.role,
+        data: null,
+        errors: {
+          required: allowedRoles,
+          current: req.account.role,
+        },
       });
     }
 

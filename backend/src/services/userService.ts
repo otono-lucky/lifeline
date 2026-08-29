@@ -351,8 +351,11 @@ export const updateUser = async (
   const completion = calculateProfileCompletion(mergedForCalculation);
   cleanedData.profileCompletionPercentage = completion.percentage;
 
-  // If hits 100% and currently DRAFT, promote to PENDING_VETTING
-  if (completion.isComplete && existingUser.vettingStatus === "DRAFT") {
+  // If hits 100% and currently DRAFT or REJECTED, promote to PENDING_VETTING
+  if (
+    completion.isComplete &&
+    (existingUser.vettingStatus === "DRAFT" || existingUser.vettingStatus === "REJECTED")
+  ) {
     cleanedData.vettingStatus = "PENDING_VETTING";
 
     // Auto-assign counselor if not assigned
@@ -446,7 +449,8 @@ export const saveUserPhoto = async (
     where: { id: user.id },
     data: {
       profileCompletionPercentage: completion.percentage,
-      ...(completion.isComplete && user.vettingStatus === "DRAFT"
+      ...(completion.isComplete &&
+      (user.vettingStatus === "DRAFT" || user.vettingStatus === "REJECTED")
         ? { vettingStatus: "PENDING_VETTING" }
         : {}),
     },
@@ -513,7 +517,8 @@ export const createUserSocialMedia = async (
     where: { id: user.id },
     data: {
       profileCompletionPercentage: completion.percentage,
-      ...(completion.isComplete && user.vettingStatus === "DRAFT"
+      ...(completion.isComplete &&
+      (user.vettingStatus === "DRAFT" || user.vettingStatus === "REJECTED")
         ? { vettingStatus: "PENDING_VETTING" }
         : {}),
     },
