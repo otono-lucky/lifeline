@@ -1,48 +1,43 @@
 // app/(app)/(tabs)/messages.tsx
-// Phase 7: Active Matches & Moderated In-App Conversations Hub
+// Phase 7: Active Matches & Moderated In-App Conversations Hub with TanStack Query
 
-import React, { useState, useEffect, useCallback } from "react";
+import React from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
 import ScreenWrapper from "../../../components/layout/ScreenWrapper";
 import Card from "../../../components/ui/Card";
 import Badge from "../../../components/ui/Badge";
 import Avatar from "../../../components/ui/Avatar";
+import StateView from "../../../components/ui/StateView";
 import communicationService from "../../../services/communicationService";
 import { Conversation } from "../../../types";
-import { MessageCircle, ShieldCheck, Heart, ChevronRight, Lock } from "lucide-react-native";
+import { MessageCircle, ChevronRight } from "lucide-react-native";
 
 export default function MessagesScreen() {
   const router = useRouter();
 
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-
-  const loadConversations = useCallback(async () => {
-    try {
+  const {
+    data: conversations = [],
+    isLoading,
+    isError,
+    error,
+    refetch,
+    isRefetching,
+  } = useQuery({
+    queryKey: ["conversations"],
+    queryFn: async () => {
       const response = await communicationService.getConversations();
-      if (response.success && response.data) {
-        setConversations(response.data);
-      }
-    } catch (err: any) {
-      console.warn("Failed to load conversations:", err);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadConversations();
-  }, [loadConversations]);
+      return response.data || [];
+    },
+    refetchInterval: 10000, // Poll every 10s for real-time conversation updates
+  });
 
   return (
     <ScreenWrapper
@@ -51,37 +46,40 @@ export default function MessagesScreen() {
       isScrollable={false}
     >
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#2563EB" />
-        </View>
+        <StateView
+          type="loading"
+          title="Loading Conversations..."
+          message="Fetching active couple and counselor channels."
+        />
+      ) : isError ? (
+        <StateView
+          type="error"
+          title="Unable to Load Conversations"
+          message={error instanceof Error ? error.message : "Failed to load chats."}
+          onRetry={refetch}
+        />
       ) : conversations.length === 0 ? (
-        <View className="flex-1 items-center justify-center p-6 text-center">
-          <View className="mb-4 rounded-full bg-blue-50 p-6">
-            <MessageCircle size={40} color="#2563EB" />
-          </View>
-          <Text className="text-xl font-bold text-slate-900 text-center mb-1">
-            No Active Conversations
-          </Text>
-          <Text className="text-sm text-slate-500 text-center max-w-xs leading-relaxed">
-            Once a match request is mutually accepted, your private couple channel and 4-party counselor channel will appear here.
-          </Text>
-        </View>
+        <StateView
+          type="empty"
+          icon={<MessageCircle size={40} color="#2563EB" />}
+          title="No Active Conversations"
+          message="Once a match request is mutually accepted, your private couple channel and 4-party counselor channel will appear here."
+          actionTitle="Refresh"
+          onAction={refetch}
+        />
       ) : (
         <ScrollView
           className="flex-1"
           showsVerticalScrollIndicator={false}
           refreshControl={
             <RefreshControl
-              refreshing={isRefreshing}
-              onRefresh={() => {
-                setIsRefreshing(true);
-                loadConversations();
-              }}
+              refreshing={isRefetching}
+              onRefresh={refetch}
             />
           }
         >
           <View className="gap-3 pb-8">
-            {conversations.map((conv) => {
+            {conversations.map((conv: Conversation) => {
               const isGroup = conv.type === "COUNSELOR_GROUP";
               const title =
                 conv.title ||

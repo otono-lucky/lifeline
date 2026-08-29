@@ -1,7 +1,7 @@
 // app/(app)/chat/[conversationId].tsx
-// Phase 7: In-App Chat Room (Private Couple Channel & 4-Party Counselor Group Channel)
+// Phase 7: In-App Chat Room with TanStack Query & Auto-Refresh
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useRef } from "react";
 import {
   View,
   Text,
@@ -13,62 +13,66 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ScreenWrapper from "../../../components/layout/ScreenWrapper";
-import Badge from "../../../components/ui/Badge";
 import Avatar from "../../../components/ui/Avatar";
+import StateView from "../../../components/ui/StateView";
 import communicationService from "../../../services/communicationService";
 import { useAuth } from "../../../context/AuthContext";
 import { Message } from "../../../types";
-import { Send, Calendar, ShieldCheck, Lock } from "lucide-react-native";
+import { Send, Calendar, Lock } from "lucide-react-native";
 
 export default function ChatConversationScreen() {
   const { conversationId } = useLocalSearchParams<{ conversationId: string }>();
   const router = useRouter();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
 
-  const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSending, setIsSending] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
-  useEffect(() => {
-    const fetchMessages = async () => {
-      if (!conversationId) return;
-      try {
-        const response = await communicationService.getMessages(conversationId);
-        if (response.success && response.data) {
-          setMessages(response.data);
-        }
-      } catch (err: any) {
-        console.warn("Failed to load messages:", err);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchMessages();
-  }, [conversationId]);
+  // 1. TanStack Query for Messages with polling every 3s
+  const {
+    data: messages = [],
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
+    queryKey: ["chatMessages", conversationId],
+    queryFn: async () => {
+      if (!conversationId) return [];
+      const response = await communicationService.getMessages(conversationId);
+      return response.data || [];
+    },
+    enabled: Boolean(conversationId),
+    refetchInterval: 3000, // 3s polling for real-time messaging
+  });
 
-  const handleSendMessage = async () => {
-    if (!inputText.trim() || !conversationId) return;
+  // 2. Send Message Mutation
+  const sendMutation = useMutation({
+    mutationFn: async (content: string) => {
+      if (!conversationId) throw new Error("No conversation ID");
+      return await communicationService.sendMessage(conversationId, content);
+    },
+    onSuccess: (res) => {
+      queryClient.setQueryData<Message[]>(["chatMessages", conversationId], (old = []) => [
+        ...old,
+        res.data as Message,
+      ]);
+      setTimeout(() => {
+        scrollViewRef.current?.scrollToEnd({ animated: true });
+      }, 100);
+    },
+    onError: (err: any) => {
+      console.warn("Failed to send message:", err);
+    },
+  });
 
+  const handleSendMessage = () => {
+    if (!inputText.trim() || !conversationId || sendMutation.isPending) return;
     const textToSend = inputText.trim();
     setInputText("");
-    setIsSending(true);
-
-    try {
-      const response = await communicationService.sendMessage(conversationId, textToSend);
-      if (response.success && response.data) {
-        setMessages((prev) => [...prev, response.data]);
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
-      }
-    } catch (err: any) {
-      console.warn("Failed to send message:", err);
-    } finally {
-      setIsSending(false);
-    }
+    sendMutation.mutate(textToSend);
   };
 
   return (
@@ -78,7 +82,9 @@ export default function ChatConversationScreen() {
       onBack={() => router.back()}
       rightAction={
         <TouchableOpacity
-          onPress={() => router.push(`/(app)/modal/event-scheduler?matchId=${conversationId}` as any)}
+          onPress={() =>
+            router.push(`/(app)/modal/event-scheduler?matchId=${conversationId}` as any)
+          }
           className="flex-row items-center rounded-xl bg-blue-50 px-3 py-1.5 border border-blue-200"
         >
           <Calendar size={15} color="#2563EB" />
@@ -100,9 +106,18 @@ export default function ChatConversationScreen() {
         </View>
 
         {isLoading ? (
-          <View className="flex-1 items-center justify-center">
-            <ActivityIndicator size="large" color="#2563EB" />
-          </View>
+          <StateView
+            type="loading"
+            title="Loading Chat..."
+            message="Connecting to encrypted conversation channel."
+          />
+        ) : isError ? (
+          <StateView
+            type="error"
+            title="Unable to Load Messages"
+            message="Could not connect to conversation room."
+            onRetry={refetch}
+          />
         ) : (
           <ScrollView
             ref={scrollViewRef}
@@ -117,7 +132,7 @@ export default function ChatConversationScreen() {
                 </Text>
               </View>
             ) : (
-              messages.map((msg) => {
+              messages.map((msg: Message) => {
                 const isMe = msg.senderId === user?.accountId || msg.senderId === user?.id;
 
                 return (
@@ -182,12 +197,16 @@ export default function ChatConversationScreen() {
 
           <TouchableOpacity
             onPress={handleSendMessage}
-            disabled={!inputText.trim() || isSending}
+            disabled={!inputText.trim() || sendMutation.isPending}
             className={`rounded-2xl p-3.5 items-center justify-center ${
               inputText.trim() ? "bg-blue-600 shadow-sm" : "bg-slate-300"
             }`}
           >
-            <Send size={18} color="#FFFFFF" />
+            {sendMutation.isPending ? (
+              <ActivityIndicator size="small" color="#FFFFFF" />
+            ) : (
+              <Send size={18} color="#FFFFFF" />
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

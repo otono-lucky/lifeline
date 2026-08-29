@@ -1,74 +1,87 @@
 // app/(app)/(tabs)/discovery.tsx
-// Phase 6: Geo-Weighted Discovery Feed with 3-Slot "Shame-Free" Request Logic
+// Phase 6: Geo-Weighted Discovery Feed with TanStack Query & 3-Slot "Shame-Free" Request Logic
 
-import React, { useState, useEffect, useCallback } from "react";
+import React from "react";
 import {
   View,
   Text,
   ScrollView,
   Image,
   TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
   Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ScreenWrapper from "../../../components/layout/ScreenWrapper";
 import SlotCounter from "../../../components/ui/SlotCounter";
 import Button from "../../../components/ui/Button";
 import Card from "../../../components/ui/Card";
 import Badge from "../../../components/ui/Badge";
+import StateView from "../../../components/ui/StateView";
 import discoveryService from "../../../services/discoveryService";
 import requestService from "../../../services/requestService";
 import { CandidateProfile } from "../../../types";
 import {
-  Sparkles,
   MapPin,
   Church,
   Send,
-  Heart,
-  UserCheck,
   Video,
   Info,
+  Sparkles,
 } from "lucide-react-native";
 
 export default function DiscoveryScreen() {
   const router = useRouter();
+  const queryClient = useQueryClient();
 
-  const [candidates, setCandidates] = useState<CandidateProfile[]>([]);
-  const [usedSlots, setUsedSlots] = useState(0);
-  const [totalSlots, setTotalSlots] = useState(3);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [sendingId, setSendingId] = useState<string | null>(null);
+  // 1. TanStack Query for Discovery Feed
+  const feedQuery = useQuery({
+    queryKey: ["discoveryFeed"],
+    queryFn: async () => {
+      const res = await discoveryService.getFeed();
+      return res.data?.candidates || [];
+    },
+  });
 
-  const loadData = useCallback(async () => {
-    try {
-      const [feedRes, requestsRes] = await Promise.all([
-        discoveryService.getFeed(),
-        requestService.getSentRequests(),
-      ]);
+  // 2. TanStack Query for Sent Requests & Slot Availability
+  const requestsQuery = useQuery({
+    queryKey: ["sentRequests"],
+    queryFn: async () => {
+      const res = await requestService.getSentRequests();
+      return res.data;
+    },
+  });
 
-      if (feedRes.success && feedRes.data?.candidates) {
-        setCandidates(feedRes.data.candidates);
-      }
-      if (requestsRes.success && requestsRes.data) {
-        setUsedSlots(requestsRes.data.slotsUsed ?? 0);
-        setTotalSlots(3);
-      }
-    } catch (err: any) {
-      console.warn("Failed to load discovery feed:", err);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
+  // 3. Mutation to send match request
+  const sendRequestMutation = useMutation({
+    mutationFn: async (targetId: string) => {
+      return await requestService.sendRequest(targetId);
+    },
+    onSuccess: (_, targetId) => {
+      queryClient.invalidateQueries({ queryKey: ["discoveryFeed"] });
+      queryClient.invalidateQueries({ queryKey: ["sentRequests"] });
+      Alert.alert(
+        "Request Sent! 🎉",
+        "Match request sent. If accepted, your private couple chat and counselor guidance channels will initialize automatically.",
+      );
+    },
+    onError: (err: any) => {
+      Alert.alert("Request Error", err.message || "Failed to send request.");
+    },
+  });
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
+  const candidates = feedQuery.data || [];
+  const usedSlots = requestsQuery.data?.slotsUsed ?? 0;
+  const totalSlots = 3;
+  const isRefreshing = feedQuery.isRefetching || requestsQuery.isRefetching;
 
-  const handleSendRequest = async (candidate: CandidateProfile) => {
+  const handleRefresh = () => {
+    feedQuery.refetch();
+    requestsQuery.refetch();
+  };
+
+  const handleSendRequest = (candidate: CandidateProfile) => {
     if (usedSlots >= totalSlots) {
       Alert.alert(
         "Slots Full",
@@ -76,22 +89,7 @@ export default function DiscoveryScreen() {
       );
       return;
     }
-
-    setSendingId(candidate.id);
-    try {
-      const response = await requestService.sendRequest(candidate.accountId || candidate.id);
-      if (response.success) {
-        setUsedSlots((prev) => prev + 1);
-        Alert.alert(
-          "Request Sent!",
-          `Match request sent to ${candidate.firstName}. If accepted, your private and counselor channels will initialize automatically.`,
-        );
-      }
-    } catch (err: any) {
-      Alert.alert("Request Error", err.message || "Failed to send request.");
-    } finally {
-      setSendingId(null);
-    }
+    sendRequestMutation.mutate(candidate.accountId || candidate.id);
   };
 
   return (
@@ -105,32 +103,34 @@ export default function DiscoveryScreen() {
         <SlotCounter usedSlots={usedSlots} totalSlots={totalSlots} />
       </View>
 
-      {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#2563EB" />
-          <Text className="mt-3 text-sm font-medium text-slate-500">
-            Finding compatible candidates...
-          </Text>
-        </View>
+      {feedQuery.isLoading ? (
+        <StateView
+          type="loading"
+          title="Finding Matches..."
+          message="Searching for verified believers matching your church and geographic scope."
+        />
+      ) : feedQuery.isError ? (
+        <StateView
+          type="error"
+          title="Unable to Load Discovery Feed"
+          message={feedQuery.error instanceof Error ? feedQuery.error.message : "Failed to fetch candidates."}
+          onRetry={handleRefresh}
+        />
       ) : candidates.length === 0 ? (
-        <View className="flex-1 items-center justify-center p-6 text-center">
-          <View className="mb-4 rounded-full bg-blue-50 p-6">
-            <Sparkles size={40} color="#2563EB" />
-          </View>
-          <Text className="text-xl font-bold text-slate-900 text-center mb-2">
-            No New Candidates
-          </Text>
-          <Text className="text-sm text-slate-500 text-center mb-6 max-w-xs">
-            We are continuously verifying new believers. Check back soon or broaden your search scope.
-          </Text>
-          <Button title="Refresh Feed" onPress={loadData} />
-        </View>
+        <StateView
+          type="empty"
+          icon={<Sparkles size={40} color="#2563EB" />}
+          title="No Candidates Found"
+          message="We are continuously vetting believers from local and sister parishes. Check back soon!"
+          actionTitle="Refresh Feed"
+          onAction={handleRefresh}
+        />
       ) : (
         <ScrollView
           className="flex-1"
           showsVerticalScrollIndicator={false}
           refreshControl={
-            <RefreshControl refreshing={isRefreshing} onRefresh={() => { setIsRefreshing(true); loadData(); }} />
+            <RefreshControl refreshing={isRefreshing} onRefresh={handleRefresh} />
           }
         >
           <View className="gap-5 pb-8">
@@ -138,6 +138,9 @@ export default function DiscoveryScreen() {
               const primaryPhoto =
                 candidate.photos?.[0]?.photoUrl ||
                 "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600";
+              const isSending =
+                sendRequestMutation.isPending &&
+                sendRequestMutation.variables === (candidate.accountId || candidate.id);
 
               return (
                 <Card
@@ -146,7 +149,9 @@ export default function DiscoveryScreen() {
                 >
                   {/* Photo Hero Banner */}
                   <TouchableOpacity
-                    onPress={() => router.push(`/(app)/candidate/${candidate.accountId || candidate.id}` as any)}
+                    onPress={() =>
+                      router.push(`/(app)/candidate/${candidate.accountId || candidate.id}` as any)
+                    }
                     activeOpacity={0.9}
                     className="h-80 w-full relative bg-slate-900"
                   >
@@ -156,7 +161,7 @@ export default function DiscoveryScreen() {
                     />
 
                     {/* Gradient Overlay */}
-                    <View className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                    <View className="absolute inset-0 bg-black/35" />
 
                     {/* Top Badges */}
                     <View className="absolute top-4 left-4 right-4 flex-row items-center justify-between">
@@ -184,12 +189,16 @@ export default function DiscoveryScreen() {
                     {/* Bottom Info on Image */}
                     <View className="absolute bottom-4 left-4 right-4">
                       <Text className="text-2xl font-black text-white">
-                        {candidate.firstName}{candidate.age ? `, ${candidate.age}` : ""}
+                        {candidate.firstName}
+                        {candidate.age ? `, ${candidate.age}` : ""}
                       </Text>
 
                       <View className="flex-row items-center mt-1">
                         <Church size={14} color="#93C5FD" />
-                        <Text className="ml-1.5 text-xs font-semibold text-blue-200" numberOfLines={1}>
+                        <Text
+                          className="ml-1.5 text-xs font-semibold text-blue-200"
+                          numberOfLines={1}
+                        >
                           {candidate.churchName || "Christian Believer"}
                           {candidate.branchName ? ` • ${candidate.branchName}` : ""}
                         </Text>
@@ -215,7 +224,11 @@ export default function DiscoveryScreen() {
                     {/* Action Buttons */}
                     <View className="flex-row gap-3">
                       <TouchableOpacity
-                        onPress={() => router.push(`/(app)/candidate/${candidate.accountId || candidate.id}` as any)}
+                        onPress={() =>
+                          router.push(
+                            `/(app)/candidate/${candidate.accountId || candidate.id}` as any,
+                          )
+                        }
                         className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 items-center justify-center"
                       >
                         <Info size={20} color="#64748B" />
@@ -225,7 +238,7 @@ export default function DiscoveryScreen() {
                         title="Send Match Request"
                         rightIcon={<Send size={16} color="#FFFFFF" />}
                         disabled={usedSlots >= totalSlots}
-                        isLoading={sendingId === candidate.id}
+                        isLoading={isSending}
                         onPress={() => handleSendRequest(candidate)}
                         className="flex-1"
                       />

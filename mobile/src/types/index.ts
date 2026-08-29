@@ -69,9 +69,11 @@ export interface UserProfile {
   residenceLongitude?: number;
   residencePlaceId?: string;
   churchId?: string;
+  church?: string;
   churchName?: string;
   branchName?: string;
   matchPreference?: MatchPreferenceType;
+  interests?: string[] | null;
   videoIntroUrl?: string;
   videoDurationSeconds?: number;
   photos: UserPhoto[];

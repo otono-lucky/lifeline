@@ -1,132 +1,119 @@
 // app/(app)/(tabs)/requests.tsx
-// Phase 6: 3-Slot Match Request Management (Sent & Received, Blind Rejection, First-Come Acceptance)
+// Phase 6: 3-Slot Match Request Management with TanStack Query & Strict Blind Rejection
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator,
   RefreshControl,
   Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import ScreenWrapper from "../../../components/layout/ScreenWrapper";
 import SlotCounter from "../../../components/ui/SlotCounter";
 import Card from "../../../components/ui/Card";
 import Badge from "../../../components/ui/Badge";
 import Button from "../../../components/ui/Button";
 import Avatar from "../../../components/ui/Avatar";
+import StateView from "../../../components/ui/StateView";
 import requestService from "../../../services/requestService";
 import { MatchRequest } from "../../../types";
 import {
   Send,
   Inbox,
-  CheckCircle2,
-  XCircle,
   Clock,
-  Sparkles,
-  Info,
 } from "lucide-react-native";
 
 export default function RequestsScreen() {
   const router = useRouter();
-
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<"sent" | "received">("received");
-  const [sentRequests, setSentRequests] = useState<MatchRequest[]>([]);
-  const [receivedRequests, setReceivedRequests] = useState<MatchRequest[]>([]);
-  const [usedSlots, setUsedSlots] = useState(0);
-  const [totalSlots, setTotalSlots] = useState(3);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [processingId, setProcessingId] = useState<string | null>(null);
 
-  const loadRequests = useCallback(async () => {
-    try {
-      const [sentRes, receivedRes] = await Promise.all([
-        requestService.getSentRequests(),
-        requestService.getReceivedRequests(),
-      ]);
+  // 1. Query for Sent Requests
+  const sentQuery = useQuery({
+    queryKey: ["sentRequests"],
+    queryFn: async () => {
+      const res = await requestService.getSentRequests();
+      return res.data;
+    },
+  });
 
-      if (sentRes.success && sentRes.data) {
-        setSentRequests(sentRes.data.requests || []);
-        setUsedSlots(sentRes.data.slotsUsed ?? 0);
-        setTotalSlots(3);
-      }
-      if (receivedRes.success && receivedRes.data) {
-        setReceivedRequests(receivedRes.data.requests || []);
-      }
-    } catch (err: any) {
-      console.warn("Failed to load requests:", err);
-    } finally {
-      setIsLoading(false);
-      setIsRefreshing(false);
-    }
-  }, []);
+  // 2. Query for Received Requests
+  const receivedQuery = useQuery({
+    queryKey: ["receivedRequests"],
+    queryFn: async () => {
+      const res = await requestService.getReceivedRequests();
+      return res.data?.requests || [];
+    },
+  });
 
-  useEffect(() => {
-    loadRequests();
-  }, [loadRequests]);
-
-  // First-Come Acceptance (auto-supersedes other requests & provisions channels)
-  const handleAccept = async (request: MatchRequest) => {
-    setProcessingId(request.id);
-    try {
-      const response = await requestService.acceptRequest(request.id);
-      if (response.success) {
-        Alert.alert(
-          "Match Accepted! 🎉",
-          "Private encrypted couple chat and 4-party counselor guidance channels have been initialized.",
-          [
-            {
-              text: "Open Conversations",
-              onPress: () => router.push("/(app)/(tabs)/messages" as any),
-            },
-          ],
-        );
-        loadRequests();
-      }
-    } catch (err: any) {
+  // 3. Mutations
+  const acceptMutation = useMutation({
+    mutationFn: (requestId: string) => requestService.acceptRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sentRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["receivedRequests"] });
+      Alert.alert(
+        "Match Accepted! 🎉",
+        "Private encrypted couple chat and 4-party counselor guidance channels have been initialized.",
+        [
+          {
+            text: "Open Conversations",
+            onPress: () => router.push("/(app)/(tabs)/messages" as any),
+          },
+        ],
+      );
+    },
+    onError: (err: any) => {
       Alert.alert("Acceptance Error", err.message || "Failed to accept request.");
-    } finally {
-      setProcessingId(null);
-    }
-  };
+    },
+  });
 
-  // Blind Rejection (sender notified generically of reclaimed slot)
-  const handleDecline = async (request: MatchRequest) => {
-    setProcessingId(request.id);
-    try {
-      const response = await requestService.declineRequest(request.id);
-      if (response.success) {
-        Alert.alert("Request Declined", "The request was declined discreetly.");
-        loadRequests();
-      }
-    } catch (err: any) {
+  const declineMutation = useMutation({
+    mutationFn: (requestId: string) => requestService.declineRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sentRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["receivedRequests"] });
+      Alert.alert("Request Declined", "The request was declined discreetly.");
+    },
+    onError: (err: any) => {
       Alert.alert("Error", err.message || "Failed to decline request.");
-    } finally {
-      setProcessingId(null);
-    }
-  };
+    },
+  });
 
-  // Cancel Sent Request to reclaim slot
-  const handleCancel = async (request: MatchRequest) => {
-    setProcessingId(request.id);
-    try {
-      const response = await requestService.cancelRequest(request.id);
-      if (response.success) {
-        Alert.alert("Request Cancelled", "Your match request slot has been reclaimed.");
-        loadRequests();
-      }
-    } catch (err: any) {
+  const cancelMutation = useMutation({
+    mutationFn: (requestId: string) => requestService.cancelRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["sentRequests"] });
+      queryClient.invalidateQueries({ queryKey: ["receivedRequests"] });
+      Alert.alert("Request Cancelled", "Your match request slot has been reclaimed.");
+    },
+    onError: (err: any) => {
       Alert.alert("Error", err.message || "Failed to cancel request.");
-    } finally {
-      setProcessingId(null);
-    }
-  };
+    },
+  });
 
-  const activeList = tab === "sent" ? sentRequests : receivedRequests;
+  // Strict Blind Rejection filter: Only show active pending (or accepted) requests in Sent tab
+  const allSent = sentQuery.data?.requests || [];
+  const activeSentRequests = allSent.filter(
+    (req) => req.status === "PENDING" || req.status === "ACCEPTED",
+  );
+  const receivedRequests = receivedQuery.data || [];
+  const usedSlots = sentQuery.data?.slotsUsed ?? activeSentRequests.length;
+  const totalSlots = 3;
+
+  const activeList = tab === "sent" ? activeSentRequests : receivedRequests;
+  const isLoading = sentQuery.isLoading || receivedQuery.isLoading;
+  const isError = sentQuery.isError || receivedQuery.isError;
+  const isRefreshing = sentQuery.isRefetching || receivedQuery.isRefetching;
+
+  const handleRefresh = () => {
+    sentQuery.refetch();
+    receivedQuery.refetch();
+  };
 
   return (
     <ScreenWrapper
@@ -175,29 +162,37 @@ export default function RequestsScreen() {
               tab === "sent" ? "text-blue-600" : "text-slate-600"
             }`}
           >
-            Sent ({sentRequests.length}/3)
+            Sent ({activeSentRequests.length}/3)
           </Text>
         </TouchableOpacity>
       </View>
 
       {isLoading ? (
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#2563EB" />
-        </View>
+        <StateView
+          type="loading"
+          title="Loading Requests..."
+          message="Fetching active match requests and slots."
+        />
+      ) : isError ? (
+        <StateView
+          type="error"
+          title="Unable to Load Requests"
+          message="Could not load your match requests. Please check your network connection."
+          onRetry={handleRefresh}
+        />
       ) : activeList.length === 0 ? (
-        <View className="flex-1 items-center justify-center p-6 text-center">
-          <View className="mb-4 rounded-full bg-slate-100 p-6">
-            <Clock size={36} color="#64748B" />
-          </View>
-          <Text className="text-lg font-bold text-slate-800 text-center mb-1">
-            {tab === "sent" ? "No Sent Requests" : "No Pending Requests"}
-          </Text>
-          <Text className="text-xs text-slate-500 text-center max-w-xs">
-            {tab === "sent"
+        <StateView
+          type="empty"
+          icon={<Clock size={36} color="#64748B" />}
+          title={tab === "sent" ? "No Sent Requests" : "No Pending Requests"}
+          message={
+            tab === "sent"
               ? "You have all 3 request slots available to connect with believers."
-              : "Incoming match requests from verified believers will appear here."}
-          </Text>
-        </View>
+              : "Incoming match requests from verified believers will appear here."
+          }
+          actionTitle="Refresh"
+          onAction={handleRefresh}
+        />
       ) : (
         <ScrollView
           className="flex-1"
@@ -205,10 +200,7 @@ export default function RequestsScreen() {
           refreshControl={
             <RefreshControl
               refreshing={isRefreshing}
-              onRefresh={() => {
-                setIsRefreshing(true);
-                loadRequests();
-              }}
+              onRefresh={handleRefresh}
             />
           }
         >
@@ -217,6 +209,10 @@ export default function RequestsScreen() {
               const profile = tab === "sent" ? req.receiver : req.sender;
               const name = profile?.firstName || (tab === "sent" ? "Recipient" : "Sender");
               const photo = profile?.photos?.[0]?.photoUrl;
+              const isMutating =
+                (acceptMutation.isPending && acceptMutation.variables === req.id) ||
+                (declineMutation.isPending && declineMutation.variables === req.id) ||
+                (cancelMutation.isPending && cancelMutation.variables === req.id);
 
               return (
                 <Card
@@ -255,16 +251,16 @@ export default function RequestsScreen() {
                         title="Decline"
                         variant="secondary"
                         size="sm"
-                        isLoading={processingId === req.id}
-                        onPress={() => handleDecline(req)}
+                        isLoading={isMutating}
+                        onPress={() => declineMutation.mutate(req.id)}
                         className="flex-1"
                       />
                       <Button
                         title="Accept (First-Come)"
                         variant="primary"
                         size="sm"
-                        isLoading={processingId === req.id}
-                        onPress={() => handleAccept(req)}
+                        isLoading={isMutating}
+                        onPress={() => acceptMutation.mutate(req.id)}
                         className="flex-1"
                       />
                     </View>
@@ -274,8 +270,8 @@ export default function RequestsScreen() {
                         Slot active • Awaiting response
                       </Text>
                       <TouchableOpacity
-                        onPress={() => handleCancel(req)}
-                        disabled={processingId === req.id}
+                        onPress={() => cancelMutation.mutate(req.id)}
+                        disabled={isMutating}
                         className="px-3 py-1.5 rounded-xl bg-slate-100"
                       >
                         <Text className="text-xs font-bold text-red-600">

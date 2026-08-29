@@ -1,14 +1,12 @@
 // app/(auth)/login.tsx
-// Phase 3: Login Screen with Credentials & Social Login
+// Phase 3: Login Screen with React Hook Form + Zod
 
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
+import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import AuthLayout from "../../components/layout/AuthLayout";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
@@ -16,43 +14,40 @@ import authService from "../../services/authService";
 import { useAuth } from "../../context/AuthContext";
 import { Mail, Lock, LogIn } from "lucide-react-native";
 
+const loginSchema = z.object({
+  email: z.string().min(1, "Email address is required").email("Please enter a valid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+type LoginFormValues = z.infer<typeof loginSchema>;
+
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
-
-  const [formData, setFormData] = useState({
-    email: "",
-    password: "",
-  });
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const validate = () => {
-    const newErrors: Record<string, string> = {};
-    if (!formData.email.trim()) {
-      newErrors.email = "Email address is required";
-    }
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  const {
+    control,
+    handleSubmit,
+    formState: { errors },
+  } = useForm<LoginFormValues>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
 
-  const handleLogin = async () => {
-    if (!validate()) return;
-
+  const onSubmit = async (values: LoginFormValues) => {
     setIsLoading(true);
     try {
       const response = await authService.login({
-        email: formData.email.trim().toLowerCase(),
-        password: formData.password,
+        email: values.email.trim().toLowerCase(),
+        password: values.password,
       });
 
       if (response.success && response.data.token) {
         await login(response.data.token, response.data.user);
-        // Central Gatekeeper index will redirect based on user's completion & vetting state
         router.replace("/" as any);
       }
     } catch (error: any) {
@@ -97,26 +92,40 @@ export default function LoginScreen() {
         </Text>
 
         {/* Email */}
-        <Input
-          label="Email Address"
-          placeholder="your.email@example.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          leftIcon={<Mail size={18} color="#64748B" />}
-          value={formData.email}
-          onChangeText={(text) => setFormData({ ...formData, email: text })}
-          error={errors.email}
+        <Controller
+          control={control}
+          name="email"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <Input
+              label="Email Address"
+              placeholder="your.email@example.com"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              leftIcon={<Mail size={18} color="#64748B" />}
+              value={value}
+              onBlur={onBlur}
+              onChangeText={onChange}
+              error={errors.email?.message}
+            />
+          )}
         />
 
         {/* Password */}
-        <Input
-          label="Password"
-          placeholder="Enter your password"
-          isPassword
-          leftIcon={<Lock size={18} color="#64748B" />}
-          value={formData.password}
-          onChangeText={(text) => setFormData({ ...formData, password: text })}
-          error={errors.password}
+        <Controller
+          control={control}
+          name="password"
+          render={({ field: { onChange, onBlur, value } }) => (
+            <Input
+              label="Password"
+              placeholder="Enter your password"
+              isPassword
+              leftIcon={<Lock size={18} color="#64748B" />}
+              value={value}
+              onBlur={onBlur}
+              onChangeText={onChange}
+              error={errors.password?.message}
+            />
+          )}
         />
 
         {/* Forgot Password Link */}
@@ -135,7 +144,7 @@ export default function LoginScreen() {
           title="Sign In"
           rightIcon={<LogIn size={18} color="#FFFFFF" />}
           isLoading={isLoading}
-          onPress={handleLogin}
+          onPress={handleSubmit(onSubmit)}
           className="mb-4"
         />
 

@@ -1,10 +1,13 @@
 // app/(onboarding)/_layout.tsx
-// Profile Enrichment Wizard Stack Layout
+// Profile Enrichment Wizard Stack Layout with Navigation Guard
 
 import React from "react";
 import { Stack } from "expo-router";
+import { useNavGuard } from "../../hooks/useNavGuard";
 
 export default function OnboardingLayoutGroup() {
+  useNavGuard("onboarding");
+
   return (
     <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>
       <Stack.Screen name="church-selection" />

@@ -76,6 +76,7 @@ export default function ChurchSelectionScreen() {
     try {
       if (user?.accountId) {
         await userService.updateProfile(user.accountId, {
+          church: selectedChurch.id,
           churchId: selectedChurch.id,
           branchName: branchName.trim(),
         } as any);

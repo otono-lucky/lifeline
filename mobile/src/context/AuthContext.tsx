@@ -1,12 +1,11 @@
 // context/AuthContext.tsx
-// Core Authentication & Lifecycle State Manager
+// Context adapter wrapping Zustand authStore for seamless compatibility
 
-import React, { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import apiClient from "../services/apiClient";
+import React, { useEffect, ReactNode } from "react";
+import { useAuthStore } from "../store/authStore";
 import { UserProfile, UserVettingStatus } from "../types";
 
-interface AuthContextType {
+export interface AuthContextType {
   token: string | null;
   user: UserProfile | null;
   isLoading: boolean;
@@ -19,98 +18,30 @@ interface AuthContextType {
   updateLocalUser: (updater: Partial<UserProfile>) => void;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [token, setToken] = useState<string | null>(null);
-  const [user, setUser] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-
-  const refreshUser = async () => {
-    try {
-      const response = await apiClient.get<{ success: boolean; data: { user: UserProfile } }>("/auth/me");
-      if (response.data.success && response.data.data?.user) {
-        setUser(response.data.data.user);
-      }
-    } catch (error) {
-      console.warn("[AuthContext] Failed to fetch current user profile:", error);
-    }
-  };
+  const initialize = useAuthStore((state) => state.initialize);
 
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        const storedToken = await AsyncStorage.getItem("lifeline_token");
-        if (storedToken) {
-          setToken(storedToken);
-          const response = await apiClient.get<{ success: boolean; data: { user: UserProfile } }>("/auth/me");
-          if (response.data.success && response.data.data?.user) {
-            setUser(response.data.data.user);
-          }
-        }
-      } catch (error) {
-        console.warn("[AuthContext] Init error:", error);
-        await AsyncStorage.removeItem("lifeline_token");
-        setToken(null);
-        setUser(null);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+    initialize();
+  }, [initialize]);
 
-    initializeAuth();
-  }, []);
-
-  const login = async (newToken: string, userData?: any) => {
-    await AsyncStorage.setItem("lifeline_token", newToken);
-    setToken(newToken);
-    if (userData) {
-      setUser(userData);
-    } else {
-      await refreshUser();
-    }
-  };
-
-  const logout = async () => {
-    await AsyncStorage.removeItem("lifeline_token");
-    setToken(null);
-    setUser(null);
-  };
-
-  const updateLocalUser = (updater: Partial<UserProfile>) => {
-    setUser((prev) => (prev ? { ...prev, ...updater } : null));
-  };
-
-  const isAuthenticated = Boolean(token && user);
-  const isProfileComplete = (user?.profileCompletionPercentage ?? 0) >= 100;
-  const vettingStatus: UserVettingStatus = user?.vettingStatus || "DRAFT";
-
-  return (
-    <AuthContext.Provider
-      value={{
-        token,
-        user,
-        isLoading,
-        isAuthenticated,
-        isProfileComplete,
-        vettingStatus,
-        login,
-        logout,
-        refreshUser,
-        updateLocalUser,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
+  return <>{children}</>;
 };
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+export const useAuth = (): AuthContextType => {
+  const store = useAuthStore();
+  return {
+    token: store.token,
+    user: store.user,
+    isLoading: store.isLoading,
+    isAuthenticated: store.isAuthenticated,
+    isProfileComplete: store.isProfileComplete,
+    vettingStatus: store.vettingStatus,
+    login: store.login,
+    logout: store.logout,
+    refreshUser: store.refreshUser,
+    updateLocalUser: store.updateLocalUser,
+  };
 };
 
-export default AuthContext;
+export default useAuth;

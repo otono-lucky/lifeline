@@ -1,73 +1,48 @@
-import { Platform, StyleSheet, Text, type TextProps } from 'react-native';
+// components/themed-text.tsx
+// NativeWind-powered ThemedText component
 
-import { Fonts, ThemeColor } from '@/constants/theme';
-import { useTheme } from '@/hooks/use-theme';
+import React from "react";
+import { Text, type TextProps } from "react-native";
 
 export type ThemedTextProps = TextProps & {
-  type?: 'default' | 'title' | 'small' | 'smallBold' | 'subtitle' | 'link' | 'linkPrimary' | 'code';
-  themeColor?: ThemeColor;
+  type?: "default" | "title" | "small" | "smallBold" | "subtitle" | "link" | "linkPrimary" | "code";
+  themeColor?: string;
+  className?: string;
 };
 
-export function ThemedText({ style, type = 'default', themeColor, ...rest }: ThemedTextProps) {
-  const theme = useTheme();
+export function ThemedText({
+  type = "default",
+  themeColor,
+  className = "",
+  children,
+  ...rest
+}: ThemedTextProps) {
+  const getTypeClasses = () => {
+    switch (type) {
+      case "title":
+        return "text-4xl font-extrabold text-slate-900";
+      case "subtitle":
+        return "text-2xl font-bold text-slate-800";
+      case "small":
+        return "text-xs text-slate-500";
+      case "smallBold":
+        return "text-xs font-bold text-slate-700";
+      case "link":
+      case "linkPrimary":
+        return "text-sm font-semibold text-blue-600";
+      case "code":
+        return "font-mono text-xs text-slate-700 bg-slate-100 p-1 rounded";
+      case "default":
+      default:
+        return "text-base font-normal text-slate-900";
+    }
+  };
 
   return (
-    <Text
-      style={[
-        { color: theme[themeColor ?? 'text'] },
-        type === 'default' && styles.default,
-        type === 'title' && styles.title,
-        type === 'small' && styles.small,
-        type === 'smallBold' && styles.smallBold,
-        type === 'subtitle' && styles.subtitle,
-        type === 'link' && styles.link,
-        type === 'linkPrimary' && styles.linkPrimary,
-        type === 'code' && styles.code,
-        style,
-      ]}
-      {...rest}
-    />
+    <Text className={`${getTypeClasses()} ${className}`} {...rest}>
+      {children}
+    </Text>
   );
 }
 
-const styles = StyleSheet.create({
-  small: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 500,
-  },
-  smallBold: {
-    fontSize: 14,
-    lineHeight: 20,
-    fontWeight: 700,
-  },
-  default: {
-    fontSize: 16,
-    lineHeight: 24,
-    fontWeight: 500,
-  },
-  title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
-  },
-  subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
-  },
-  link: {
-    lineHeight: 30,
-    fontSize: 14,
-  },
-  linkPrimary: {
-    lineHeight: 30,
-    fontSize: 14,
-    color: '#3c87f7',
-  },
-  code: {
-    fontFamily: Fonts.mono,
-    fontWeight: Platform.select({ android: 700 }) ?? 500,
-    fontSize: 12,
-  },
-});
+export default ThemedText;

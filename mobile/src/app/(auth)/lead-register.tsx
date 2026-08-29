@@ -1,14 +1,12 @@
 // app/(auth)/lead-register.tsx
-// Phase 3: Step 1 Low-Friction Lead Registration & Retention Loop
+// Phase 3: Step 1 Low-Friction Lead Registration with React Hook Form + Zod
 
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  Alert,
-} from "react-native";
+import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
+import { useForm, Controller } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import * as z from "zod";
 import AuthLayout from "../../components/layout/AuthLayout";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
@@ -16,60 +14,59 @@ import authService from "../../services/authService";
 import { useAuth } from "../../context/AuthContext";
 import { Mail, Phone, Lock, User, ArrowRight } from "lucide-react-native";
 
+const leadRegisterSchema = z
+  .object({
+    firstName: z.string().min(1, "First name is required"),
+    lastName: z.string().min(1, "Last name is required"),
+    email: z.string().min(1, "Email address is required").email("Please enter a valid email address"),
+    phone: z.string().min(6, "Valid phone number is required"),
+    gender: z.enum(["Male", "Female"]),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    confirmPassword: z.string().min(6, "Please confirm your password"),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
+  });
+
+type LeadRegisterFormValues = z.infer<typeof leadRegisterSchema>;
+
 export default function LeadRegisterScreen() {
   const router = useRouter();
   const { login } = useAuth();
-
-  const [formData, setFormData] = useState({
-    firstName: "",
-    lastName: "",
-    email: "",
-    phone: "",
-    gender: "Male",
-    password: "",
-    confirmPassword: "",
-  });
-
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
 
-  const validate = () => {
-    const newErrors: Record<string, string> = {};
-    if (!formData.firstName.trim()) newErrors.firstName = "First name is required";
-    if (!formData.lastName.trim()) newErrors.lastName = "Last name is required";
-    if (!formData.email.trim()) {
-      newErrors.email = "Email address is required";
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      newErrors.email = "Please enter a valid email address";
-    }
-    if (!formData.phone.trim()) {
-      newErrors.phone = "Phone number is required";
-    }
-    if (!formData.password) {
-      newErrors.password = "Password is required";
-    } else if (formData.password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
-    }
-    if (formData.password !== formData.confirmPassword) {
-      newErrors.confirmPassword = "Passwords do not match";
-    }
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    watch,
+    formState: { errors },
+  } = useForm<LeadRegisterFormValues>({
+    resolver: zodResolver(leadRegisterSchema),
+    defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      gender: "Male",
+      password: "",
+      confirmPassword: "",
+    },
+  });
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+  const currentGender = watch("gender");
 
-  const handleRegister = async () => {
-    if (!validate()) return;
-
+  const onSubmit = async (values: LeadRegisterFormValues) => {
     setIsLoading(true);
     try {
       const response = await authService.registerLead({
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
-        email: formData.email.trim().toLowerCase(),
-        phone: formData.phone.trim(),
-        gender: formData.gender,
-        password: formData.password,
+        firstName: values.firstName.trim(),
+        lastName: values.lastName.trim(),
+        email: values.email.trim().toLowerCase(),
+        phone: values.phone.trim(),
+        gender: values.gender,
+        password: values.password,
       });
 
       if (response.success && response.data.token) {
@@ -92,7 +89,7 @@ export default function LeadRegisterScreen() {
         authProviderId: `auth_${Date.now()}`,
         firstName: "Faith",
         lastName: "Believer",
-        gender: formData.gender,
+        gender: currentGender,
       });
 
       if (response.success && response.data.token) {
@@ -100,7 +97,7 @@ export default function LeadRegisterScreen() {
         router.replace("/(onboarding)/church-selection" as any);
       }
     } catch (error: any) {
-      Alert.alert("Social Sign-In", error.message || "Social sign in failed.");
+      Alert.alert("Social Sign-In Failed", error.message || "Failed to authenticate.");
     } finally {
       setIsLoading(false);
     }
@@ -108,166 +105,196 @@ export default function LeadRegisterScreen() {
 
   return (
     <AuthLayout
-      heroBadge="Step 1 of 2 — Quick Start"
-      heroTitle={["Where Faith", "Meets Logic."]}
-      heroSubtitle="Create your preliminary account. You can complete your full profile in the next step."
+      heroBadge="Faith-Based Matchmaking"
+      heroTitle={["Create Your", "Account."]}
+      heroSubtitle="Step 1: Connect with intentional, verified believers for marriage."
     >
-      <View className="py-1">
-        <Text className="text-2xl font-black text-slate-900 mb-1">
-          Begin Your Journey
+      {/* Gender Selection */}
+      <View className="mb-4">
+        <Text className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+          I am a:
         </Text>
-        <Text className="text-sm text-slate-500 mb-5">
-          Join verified Christian believers preparing for marriage.
-        </Text>
-
-        {/* Gender Selector Toggle */}
-        <Text className="text-sm font-medium text-slate-700 mb-2">I am a</Text>
-        <View className="flex-row gap-3 mb-4">
-          <TouchableOpacity
-            onPress={() => setFormData({ ...formData, gender: "Male" })}
-            className={`flex-1 flex-row items-center justify-center rounded-2xl py-3.5 border ${
-              formData.gender === "Male"
-                ? "bg-blue-50 border-blue-600 shadow-sm"
-                : "bg-white border-slate-200"
-            }`}
-          >
-            <Text
-              className={`text-sm font-bold ${
-                formData.gender === "Male" ? "text-blue-600" : "text-slate-700"
-              }`}
-            >
-              Christian Brother (Male)
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => setFormData({ ...formData, gender: "Female" })}
-            className={`flex-1 flex-row items-center justify-center rounded-2xl py-3.5 border ${
-              formData.gender === "Female"
-                ? "bg-blue-50 border-blue-600 shadow-sm"
-                : "bg-white border-slate-200"
-            }`}
-          >
-            <Text
-              className={`text-sm font-bold ${
-                formData.gender === "Female" ? "text-blue-600" : "text-slate-700"
-              }`}
-            >
-              Christian Sister (Female)
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* First & Last Name */}
         <View className="flex-row gap-3">
-          <View className="flex-1">
-            <Input
-              label="First Name"
-              placeholder="e.g. John"
-              leftIcon={<User size={18} color="#64748B" />}
-              value={formData.firstName}
-              onChangeText={(text) => setFormData({ ...formData, firstName: text })}
-              error={errors.firstName}
-            />
-          </View>
-          <View className="flex-1">
-            <Input
-              label="Last Name"
-              placeholder="e.g. Doe"
-              value={formData.lastName}
-              onChangeText={(text) => setFormData({ ...formData, lastName: text })}
-              error={errors.lastName}
-            />
-          </View>
+          {(["Male", "Female"] as const).map((g) => {
+            const isSelected = currentGender === g;
+            return (
+              <TouchableOpacity
+                key={g}
+                onPress={() => setValue("gender", g)}
+                activeOpacity={0.8}
+                className={`flex-1 flex-row items-center justify-center p-3.5 rounded-2xl border-2 transition-all ${
+                  isSelected
+                    ? "border-blue-600 bg-blue-50/50"
+                    : "border-slate-200 bg-white"
+                }`}
+              >
+                <Text
+                  className={`text-sm font-bold ${
+                    isSelected ? "text-blue-600" : "text-slate-700"
+                  }`}
+                >
+                  {g === "Male" ? "Brother (Male)" : "Sister (Female)"}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
+      </View>
 
-        {/* Email */}
-        <Input
-          label="Email Address"
-          placeholder="your.email@example.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          leftIcon={<Mail size={18} color="#64748B" />}
-          value={formData.email}
-          onChangeText={(text) => setFormData({ ...formData, email: text })}
-          error={errors.email}
-        />
+      {/* Name Fields */}
+      <View className="flex-row gap-3 mb-1">
+        <View className="flex-1">
+          <Controller
+            control={control}
+            name="firstName"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="First Name"
+                placeholder="John"
+                leftIcon={<User size={18} color="#64748B" />}
+                value={value}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                error={errors.firstName?.message}
+              />
+            )}
+          />
+        </View>
+        <View className="flex-1">
+          <Controller
+            control={control}
+            name="lastName"
+            render={({ field: { onChange, onBlur, value } }) => (
+              <Input
+                label="Last Name"
+                placeholder="Doe"
+                leftIcon={<User size={18} color="#64748B" />}
+                value={value}
+                onBlur={onBlur}
+                onChangeText={onChange}
+                error={errors.lastName?.message}
+              />
+            )}
+          />
+        </View>
+      </View>
 
-        {/* Phone */}
-        <Input
-          label="Phone Number"
-          placeholder="+234 800 000 0000"
-          keyboardType="phone-pad"
-          leftIcon={<Phone size={18} color="#64748B" />}
-          value={formData.phone}
-          onChangeText={(text) => setFormData({ ...formData, phone: text })}
-          error={errors.phone}
-        />
+      {/* Email */}
+      <Controller
+        control={control}
+        name="email"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Email Address"
+            placeholder="john.doe@example.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            leftIcon={<Mail size={18} color="#64748B" />}
+            value={value}
+            onBlur={onBlur}
+            onChangeText={onChange}
+            error={errors.email?.message}
+          />
+        )}
+      />
 
-        {/* Password */}
-        <Input
-          label="Password"
-          placeholder="At least 6 characters"
-          isPassword
-          leftIcon={<Lock size={18} color="#64748B" />}
-          value={formData.password}
-          onChangeText={(text) => setFormData({ ...formData, password: text })}
-          error={errors.password}
-        />
+      {/* Phone */}
+      <Controller
+        control={control}
+        name="phone"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Phone Number"
+            placeholder="+1 555-0199"
+            keyboardType="phone-pad"
+            leftIcon={<Phone size={18} color="#64748B" />}
+            value={value}
+            onBlur={onBlur}
+            onChangeText={onChange}
+            error={errors.phone?.message}
+          />
+        )}
+      />
 
-        {/* Confirm Password */}
-        <Input
-          label="Confirm Password"
-          placeholder="Re-enter password"
-          isPassword
-          leftIcon={<Lock size={18} color="#64748B" />}
-          value={formData.confirmPassword}
-          onChangeText={(text) => setFormData({ ...formData, confirmPassword: text })}
-          error={errors.confirmPassword}
-        />
+      {/* Passwords */}
+      <Controller
+        control={control}
+        name="password"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Password"
+            placeholder="••••••••"
+            secureTextEntry
+            leftIcon={<Lock size={18} color="#64748B" />}
+            value={value}
+            onBlur={onBlur}
+            onChangeText={onChange}
+            error={errors.password?.message}
+          />
+        )}
+      />
 
-        {/* Submit Button */}
+      <Controller
+        control={control}
+        name="confirmPassword"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <Input
+            label="Confirm Password"
+            placeholder="••••••••"
+            secureTextEntry
+            leftIcon={<Lock size={18} color="#64748B" />}
+            value={value}
+            onBlur={onBlur}
+            onChangeText={onChange}
+            error={errors.confirmPassword?.message}
+          />
+        )}
+      />
+
+      {/* Submit Button */}
+      <Button
+        title="Continue to Onboarding"
+        isLoading={isLoading}
+        rightIcon={<ArrowRight size={18} color="#FFFFFF" />}
+        onPress={handleSubmit(onSubmit)}
+        className="mt-2 mb-4"
+      />
+
+      {/* Social Options */}
+      <View className="flex-row items-center my-4">
+        <View className="flex-1 h-[1px] bg-slate-200" />
+        <Text className="mx-4 text-xs font-semibold text-slate-400 uppercase">
+          Or Continue With
+        </Text>
+        <View className="flex-1 h-[1px] bg-slate-200" />
+      </View>
+
+      <View className="flex-row gap-3 mb-6">
         <Button
-          title="Continue to Profile Enrichment"
-          rightIcon={<ArrowRight size={18} color="#FFFFFF" />}
-          isLoading={isLoading}
-          onPress={handleRegister}
-          className="mt-3 mb-4"
+          title="Google"
+          variant="secondary"
+          size="sm"
+          onPress={() => handleSocialMock("GOOGLE")}
+          className="flex-1"
         />
+        <Button
+          title="Apple"
+          variant="secondary"
+          size="sm"
+          onPress={() => handleSocialMock("APPLE")}
+          className="flex-1"
+        />
+      </View>
 
-        {/* Divider */}
-        <View className="flex-row items-center my-4">
-          <View className="flex-1 h-[1px] bg-slate-200" />
-          <Text className="mx-4 text-xs font-bold uppercase tracking-wider text-slate-400">
-            Or Quick Start With
-          </Text>
-          <View className="flex-1 h-[1px] bg-slate-200" />
-        </View>
-
-        {/* Social Auth Buttons */}
-        <View className="flex-row gap-3 mb-6">
-          <TouchableOpacity
-            onPress={() => handleSocialMock("GOOGLE")}
-            className="flex-1 flex-row items-center justify-center rounded-2xl border border-slate-200 bg-white py-3.5 active:bg-slate-100 shadow-sm"
-          >
-            <Text className="text-sm font-bold text-slate-800">Google</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => handleSocialMock("APPLE")}
-            className="flex-1 flex-row items-center justify-center rounded-2xl border border-slate-900 bg-slate-900 py-3.5 active:bg-slate-800 shadow-sm"
-          >
-            <Text className="text-sm font-bold text-white">Apple</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Sign In Link */}
-        <View className="flex-row items-center justify-center pb-4">
-          <Text className="text-sm text-slate-500">Already registered? </Text>
-          <TouchableOpacity onPress={() => router.push("/(auth)/login" as any)}>
-            <Text className="text-sm font-bold text-blue-600">Sign In</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Existing Member Link */}
+      <View className="flex-row items-center justify-center">
+        <Text className="text-sm text-slate-600">Already registered? </Text>
+        <TouchableOpacity
+          onPress={() => router.push("/(auth)/login" as any)}
+          activeOpacity={0.7}
+        >
+          <Text className="text-sm font-bold text-blue-600">Sign In</Text>
+        </TouchableOpacity>
       </View>
     </AuthLayout>
   );
