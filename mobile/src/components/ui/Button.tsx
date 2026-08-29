@@ -1,5 +1,5 @@
 // components/ui/Button.tsx
-// Standardized Button component with brand variants
+// Standardized Button component with brand variants and merged classNames
 
 import React from "react";
 import {
@@ -21,6 +21,7 @@ interface ButtonProps extends TouchableOpacityProps {
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
   disabled?: boolean;
+  className?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -31,25 +32,26 @@ export const Button: React.FC<ButtonProps> = ({
   leftIcon,
   rightIcon,
   disabled = false,
+  className = "",
   style,
   ...props
 }) => {
   const getContainerStyle = () => {
     const base = "flex-row items-center justify-center rounded-2xl";
 
-    let sizeClasses = "h-13 px-6 py-3.5";
-    if (size === "sm") sizeClasses = "h-10 px-4 py-2";
-    if (size === "lg") sizeClasses = "h-15 px-8 py-4";
+    let sizeClasses = "min-h-[48px] px-6 py-3.5";
+    if (size === "sm") sizeClasses = "min-h-[40px] px-4 py-2";
+    if (size === "lg") sizeClasses = "min-h-[56px] px-8 py-4";
 
     let variantClasses = "bg-blue-600 shadow-sm active:bg-blue-700";
-    if (variant === "secondary") variantClasses = "bg-slate-100 active:bg-slate-200";
+    if (variant === "secondary") variantClasses = "bg-slate-200 active:bg-slate-300";
     if (variant === "outline") variantClasses = "border-2 border-blue-600 bg-transparent active:bg-blue-50";
     if (variant === "danger") variantClasses = "bg-red-600 active:bg-red-700";
     if (variant === "ghost") variantClasses = "bg-transparent active:bg-slate-100";
 
     const opacity = disabled || isLoading ? "opacity-50" : "opacity-100";
 
-    return `${base} ${sizeClasses} ${variantClasses} ${opacity}`;
+    return `${base} ${sizeClasses} ${variantClasses} ${opacity} ${className}`;
   };
 
   const getTextStyle = () => {
