@@ -42,11 +42,11 @@ export const Input: React.FC<InputProps> = ({
       )}
 
       <View
-        className={`flex-row items-center rounded-2xl border bg-white px-4 py-3.5 transition-all ${
+        className={`flex-row items-center rounded-2xl border bg-white px-4 py-3.5 ${
           error
             ? "border-red-500 bg-red-50/20"
             : isFocused
-            ? "border-blue-600 ring-2 ring-blue-100"
+            ? "border-blue-600 bg-blue-50/10"
             : "border-slate-200"
         }`}
       >

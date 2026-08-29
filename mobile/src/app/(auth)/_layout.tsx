@@ -1,12 +1,22 @@
 // app/(auth)/_layout.tsx
-// Public Auth Stack Layout with Navigation Guard
+// Public Auth Stack Layout with declarative navigation guards
 
 import React from "react";
-import { Stack } from "expo-router";
-import { useNavGuard } from "../../hooks/useNavGuard";
+import { Redirect, Stack } from "expo-router";
+import { useAuth } from "../../context/AuthContext";
 
 export default function AuthLayoutGroup() {
-  useNavGuard("auth");
+  const { isLoading, isAuthenticated, isProfileComplete, vettingStatus } = useAuth();
+
+  if (!isLoading && isAuthenticated) {
+    if (!isProfileComplete) {
+      return <Redirect href="/(onboarding)/church-selection" />;
+    }
+    if (vettingStatus === "VETTED_ACTIVE") {
+      return <Redirect href="/(app)/(tabs)/discovery" />;
+    }
+    return <Redirect href="/(vetting)/pending" />;
+  }
 
   return (
     <Stack screenOptions={{ headerShown: false, animation: "slide_from_right" }}>

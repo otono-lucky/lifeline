@@ -1,104 +1,89 @@
 // hooks/useNavGuard.ts
-// Guard hook enforcing Zone rules on focus / state transition
+// Global Navigation Guard enforcing Zone boundaries and Gated State Machine
 
 import { useEffect } from "react";
-import { useRouter, useSegments } from "expo-router";
+import { useRouter, useSegments, useRootNavigationState } from "expo-router";
 import { useAuth } from "../context/AuthContext";
 
-export type GuardZone = "auth" | "onboarding" | "vetting" | "app";
-
-export function useNavGuard(zone: GuardZone) {
+export function useNavGuard() {
   const router = useRouter();
-  const { isLoading, isAuthenticated, isProfileComplete, vettingStatus } = useAuth();
   const segments = useSegments();
+  const rootNavigationState = useRootNavigationState();
+  const { isLoading, isAuthenticated, isProfileComplete, vettingStatus } = useAuth();
 
   useEffect(() => {
-    if (isLoading) return;
+    // Wait until root navigation container is mounted and auth state is initialized
+    if (!rootNavigationState?.key || isLoading) return;
 
-    // 1. In Auth Zone -> if authenticated, redirect forward
-    if (zone === "auth") {
-      if (isAuthenticated) {
-        if (!isProfileComplete) {
-          router.replace("/(onboarding)/church-selection" as any);
-        } else if (vettingStatus === "VETTED_ACTIVE") {
-          router.replace("/(app)/(tabs)/discovery" as any);
-        } else {
-          router.replace("/(vetting)/pending" as any);
-        }
-      }
-      return;
-    }
+    const rootSegment = segments[0] as string | undefined;
 
-    // 2. Unauthenticated in protected zone -> send to login/register
+    const inAuthGroup = rootSegment === "(auth)";
+    const inOnboardingGroup = rootSegment === "(onboarding)";
+    const inVettingGroup = rootSegment === "(vetting)";
+    const inAppGroup = rootSegment === "(app)";
+
+    // 1. Unauthenticated -> Must be in Auth Group
     if (!isAuthenticated) {
-      router.replace("/(auth)/lead-register" as any);
-      return;
-    }
-
-    // 3. In Onboarding Zone
-    if (zone === "onboarding") {
-      if (isProfileComplete) {
-        if (vettingStatus === "VETTED_ACTIVE") {
-          router.replace("/(app)/(tabs)/discovery" as any);
-        } else {
-          router.replace("/(vetting)/pending" as any);
-        }
+      if (!inAuthGroup) {
+        router.replace("/(auth)/lead-register" as any);
       }
       return;
     }
 
-    // 4. In Vetting Zone
-    if (zone === "vetting") {
-      if (!isProfileComplete) {
+    // 2. Authenticated but Incomplete Profile (< 100%) -> Must be in Onboarding Group
+    if (!isProfileComplete) {
+      if (!inOnboardingGroup) {
         router.replace("/(onboarding)/church-selection" as any);
-        return;
-      }
-      if (vettingStatus === "VETTED_ACTIVE") {
-        router.replace("/(app)/(tabs)/discovery" as any);
-        return;
-      }
-      // Ensure the correct vetting screen is shown
-      const currentRoute = segments[segments.length - 1];
-      if (vettingStatus === "PENDING_VETTING" && currentRoute !== "pending") {
-        router.replace("/(vetting)/pending" as any);
-      } else if (vettingStatus === "REJECTED" && currentRoute !== "rejected") {
-        router.replace("/(vetting)/rejected" as any);
-      } else if (vettingStatus === "HARD_BLOCKED" && currentRoute !== "blocked") {
-        router.replace("/(vetting)/blocked" as any);
-      } else if (vettingStatus === "DEBRIEF_REQUIRED" && currentRoute !== "debrief") {
-        router.replace("/(vetting)/debrief" as any);
       }
       return;
     }
 
-    // 5. In App Zone
-    if (zone === "app") {
-      if (!isProfileComplete) {
-        router.replace("/(onboarding)/church-selection" as any);
-        return;
-      }
-      if (vettingStatus !== "VETTED_ACTIVE") {
-        switch (vettingStatus) {
-          case "PENDING_VETTING":
+    // 3. Authenticated & 100% Complete, but not VETTED_ACTIVE -> Must be in Vetting Group
+    if (vettingStatus !== "VETTED_ACTIVE") {
+      const currentVettingScreen = segments[1] as string | undefined;
+
+      switch (vettingStatus) {
+        case "PENDING_VETTING":
+          if (!inVettingGroup || currentVettingScreen !== "pending") {
             router.replace("/(vetting)/pending" as any);
-            break;
-          case "REJECTED":
+          }
+          break;
+        case "REJECTED":
+          if (!inVettingGroup || currentVettingScreen !== "rejected") {
             router.replace("/(vetting)/rejected" as any);
-            break;
-          case "HARD_BLOCKED":
+          }
+          break;
+        case "HARD_BLOCKED":
+          if (!inVettingGroup || currentVettingScreen !== "blocked") {
             router.replace("/(vetting)/blocked" as any);
-            break;
-          case "DEBRIEF_REQUIRED":
+          }
+          break;
+        case "DEBRIEF_REQUIRED":
+          if (!inVettingGroup || currentVettingScreen !== "debrief") {
             router.replace("/(vetting)/debrief" as any);
-            break;
-          default:
+          }
+          break;
+        default:
+          if (!inVettingGroup || currentVettingScreen !== "pending") {
             router.replace("/(vetting)/pending" as any);
-            break;
-        }
-        return;
+          }
+          break;
       }
+      return;
     }
-  }, [isLoading, isAuthenticated, isProfileComplete, vettingStatus, zone, segments]);
+
+    // 4. Authenticated, 100% Complete, and VETTED_ACTIVE -> Must be in App Group
+    if (inAuthGroup || inOnboardingGroup || inVettingGroup) {
+      router.replace("/(app)/(tabs)/discovery" as any);
+    }
+  }, [
+    rootNavigationState?.key,
+    isLoading,
+    isAuthenticated,
+    isProfileComplete,
+    vettingStatus,
+    segments,
+  ]);
 }
 
 export default useNavGuard;
