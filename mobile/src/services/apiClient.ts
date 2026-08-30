@@ -2,17 +2,28 @@
 // Axios API Client with secure token injection, centralized error handling & 401 interception
 
 import axios, { AxiosResponse } from "axios";
+import { Platform } from "react-native";
 import storage from "./storage";
 import { ApiResponse } from "../types";
 
-export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || "https://sincere-reasonably-mouse.ngrok-free.app/api";
+// 1. Prioritize EXPO_PUBLIC_API_URL from mobile/.env
+// 2. Fallback to active ngrok URL for physical device testing, or localhost for web/emulators
+const getDefaultApiUrl = () => {
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+  // Fallback for physical devices connecting over internet / ngrok
+  return "https://sincere-reasonably-mouse.ngrok-free.app/api";
+};
+
+export const API_BASE_URL = getDefaultApiUrl();
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 15000,
+  timeout: 20000,
   headers: {
     "Content-Type": "application/json",
+    "ngrok-skip-browser-warning": "true",
   },
 });
 
