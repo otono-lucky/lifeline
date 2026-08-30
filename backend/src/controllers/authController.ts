@@ -1,5 +1,5 @@
 // controllers/auth.controller.ts
-// Complete authentication endpoints
+// Complete authentication & lead retention endpoints
 
 import { Request, Response } from "express";
 import { prisma } from "../config/db";
@@ -10,12 +10,102 @@ import {
   requestPasswordReset,
   resetPassword,
   resendVerificationEmail,
+  registerLead,
+  handleSocialAuth,
 } from "../services/authService";
 import { successResponse, errorResponse } from "../utils/responseHandler";
 import { comparePassword, hashPassword } from "../utils/passwordHasher";
 
 /**
- * @desc    Register new user (existing - update to send verification email)
+ * @desc    Step-1 Lead Registration (Strategic Onboarding & Lead Recovery)
+ * @route   POST /api/auth/lead-register
+ * @access  Public
+ */
+export const leadRegister = async (req: Request, res: Response) => {
+  try {
+    const { email, phone, firstName, lastName, password, authProvider, authProviderId, gender } = req.body;
+
+    if (!email || !firstName || !lastName) {
+      return res.status(400).json(errorResponse("Email, firstName, and lastName are required"));
+    }
+
+    const account = await registerLead({
+      email,
+      phone,
+      firstName,
+      lastName,
+      password,
+      authProvider,
+      authProviderId,
+      gender,
+    });
+
+    const token = generateToken({
+      id: account.id,
+      email: account.email,
+      role: account.role,
+      firstName: account.firstName,
+    });
+
+    return res.status(201).json(
+      successResponse("Lead registered successfully. Initializing onboarding sequence.", {
+        token,
+        account,
+      }),
+    );
+  } catch (error: any) {
+    return res.status(400).json(errorResponse(error.message || "Failed to register lead"));
+  }
+};
+
+/**
+ * @desc    One-Click Social Login / Register (Google, Apple, etc.)
+ * @route   POST /api/auth/social-login
+ * @access  Public
+ */
+export const socialLogin = async (req: Request, res: Response) => {
+  try {
+    const { provider, providerId, email, firstName, lastName, gender } = req.body;
+
+    if (!provider || !providerId || !email) {
+      return res.status(400).json(errorResponse("Provider, providerId, and email are required"));
+    }
+
+    const account = await handleSocialAuth({
+      provider,
+      providerId,
+      email,
+      firstName: firstName || "User",
+      lastName: lastName || "",
+      gender,
+    });
+
+    const token = generateToken({
+      id: account.id,
+      email: account.email,
+      role: account.role,
+      firstName: account.firstName,
+    });
+
+    return res.json(
+      successResponse("Social login successful", {
+        token,
+        user: {
+          id: account.id,
+          firstName: account.firstName,
+          lastName: account.lastName,
+          email: account.email,
+          role: account.role,
+        },
+      }),
+    );
+  } catch (error: any) {
+    return res.status(400).json(errorResponse(error.message || "Social login failed"));
+  }
+};
+
+/**
+ * @desc    Register new user
  * @route   POST /api/auth/signup
  * @access  Public
  */
@@ -23,7 +113,7 @@ export const signup = async (req: Request, res: Response) => {
   const requestId = `signup_${Date.now().toString(36)}_${Math.random()
     .toString(36)
     .slice(2, 6)}`;
-    
+
   const startedAt = Date.now();
   console.log(
     `[POST /api/auth/signup][${requestId}] Starting - Email:`,
@@ -50,6 +140,8 @@ export const signup = async (req: Request, res: Response) => {
       interests,
       churchId,
       matchPreference,
+      branchName,
+      whatsappNumber,
     } = req.body;
 
     // Check if user exists
@@ -91,6 +183,8 @@ export const signup = async (req: Request, res: Response) => {
       interests,
       churchId,
       matchPreference,
+      branchName,
+      whatsappNumber,
     });
 
     if (!emailSent) {
@@ -100,8 +194,6 @@ export const signup = async (req: Request, res: Response) => {
       );
     }
 
-    // Generate token (user can login but features limited until verified)
-    // const token = generateToken(newAccount);
     console.log(
       `[POST /api/auth/signup][${requestId}] Success - User: ${newAccount.id} in ${Date.now() - startedAt}ms`,
     );
@@ -112,7 +204,6 @@ export const signup = async (req: Request, res: Response) => {
 
     res.status(201).json(
       successResponse(message, {
-        // token,
         user: newAccount,
         emailSent,
         ...(emailPreview ? { emailPreview } : {}),
@@ -139,19 +230,17 @@ export const login = async (req: Request, res: Response) => {
   try {
     const { email, password } = req.body;
 
-    // Find account
     const userAccount = await prisma.account.findUnique({
       where: { email },
     });
 
-    if (!userAccount) {
+    if (!userAccount || !userAccount.password) {
       console.error(
-        "[POST /api/auth/login] Failed: Invalid credentials - account not found",
+        "[POST /api/auth/login] Failed: Invalid credentials",
       );
       return res.status(400).json(errorResponse("Invalid email or password"));
     }
 
-    // Check password
     const isMatch = await comparePassword(password, userAccount.password);
     if (!isMatch) {
       console.error(
@@ -160,9 +249,7 @@ export const login = async (req: Request, res: Response) => {
       return res.status(400).json(errorResponse("Invalid email or password"));
     }
 
-    // Check if account is suspended
     if (userAccount.status === "suspended") {
-      console.error("[POST /api/auth/login] Failed: Account suspended");
       return res
         .status(403)
         .json(
@@ -172,9 +259,7 @@ export const login = async (req: Request, res: Response) => {
         );
     }
 
-    // Check email verification (only for regular users)
     if (userAccount.role === "User" && !userAccount.isEmailVerified) {
-      console.error("[POST /api/auth/login] Failed: Email not verified");
       return res.status(403).json(
         errorResponse(
           "Please verify your email address before logging in. Check your inbox for the verification link.",
@@ -186,7 +271,6 @@ export const login = async (req: Request, res: Response) => {
       );
     }
 
-    // Generate token
     const token = generateToken({
       id: userAccount.id,
       email: userAccount.email,
@@ -222,20 +306,10 @@ export const login = async (req: Request, res: Response) => {
  * @access  Public
  */
 export const requestVerification = async (req: Request, res: Response) => {
-  console.log(
-    "[POST /api/auth/request-verification] Starting - Email:",
-    req.body?.email,
-  );
   try {
     const { email } = req.body;
 
     if (!email) {
-      console.error(
-        "[POST /api/auth/forgot-password] Failed: Email is required",
-      );
-      console.error(
-        "[POST /api/auth/request-verification] Failed: Email is required",
-      );
       return res.status(400).json(errorResponse("Email is required"));
     }
 
@@ -250,10 +324,6 @@ export const requestVerification = async (req: Request, res: Response) => {
       ),
     );
   } catch (error: any) {
-    console.error(
-      "[POST /api/auth/request-verification] Failed:",
-      error.message,
-    );
     if (error?.retryAfterSeconds) {
       return res.status(429).json(
         errorResponse(error.message, {
@@ -275,16 +345,11 @@ export const requestVerification = async (req: Request, res: Response) => {
  * @access  Public
  */
 export const verifyEmailToken = async (req: Request, res: Response) => {
-  console.log("[GET /api/auth/verify-email/:token] Starting");
   try {
     const token = String(req.params.token);
-
     const result = await verifyEmail(token);
-    console.log("[GET /api/auth/verify-email/:token] Success");
-
     res.json(successResponse(result.message, { account: result.account }));
   } catch (error: any) {
-    console.error("[GET /api/auth/verify-email/:token] Failed:", error.message);
     res
       .status(400)
       .json(errorResponse(error.message || "Server error verifying email"));
@@ -297,22 +362,14 @@ export const verifyEmailToken = async (req: Request, res: Response) => {
  * @access  Public
  */
 export const forgotPassword = async (req: Request, res: Response) => {
-  console.log(
-    "[POST /api/auth/forgot-password] Starting - Email:",
-    req.body?.email,
-  );
   try {
     const { email } = req.body;
 
     if (!email) {
-      console.error(
-        "[POST /api/auth/forgot-password] Failed: Email is required",
-      );
       return res.status(400).json(errorResponse("Email is required"));
     }
 
     const result = await requestPasswordReset(email);
-    console.log("[POST /api/auth/forgot-password] Success");
 
     res.json(
       successResponse(result.message, {
@@ -320,7 +377,6 @@ export const forgotPassword = async (req: Request, res: Response) => {
       }),
     );
   } catch (error: any) {
-    console.error("[POST /api/auth/forgot-password] Failed:", error.message);
     res
       .status(500)
       .json(
@@ -337,15 +393,10 @@ export const forgotPassword = async (req: Request, res: Response) => {
  * @access  Public
  */
 export const resetPasswordWithToken = async (req: Request, res: Response) => {
-  console.log("[POST /api/auth/reset-password] Starting");
   try {
     const { token, password, confirmPassword } = req.body;
 
-    // Validation
     if (!token || !password || !confirmPassword) {
-      console.error(
-        "[POST /api/auth/reset-password] Failed: Missing required fields",
-      );
       return res
         .status(400)
         .json(
@@ -354,27 +405,18 @@ export const resetPasswordWithToken = async (req: Request, res: Response) => {
     }
 
     if (password !== confirmPassword) {
-      console.error(
-        "[POST /api/auth/reset-password] Failed: Passwords do not match",
-      );
       return res.status(400).json(errorResponse("Passwords do not match"));
     }
 
     if (password.length < 6) {
-      console.error(
-        "[POST /api/auth/reset-password] Failed: Password too short",
-      );
       return res
         .status(400)
         .json(errorResponse("Password must be at least 6 characters long"));
     }
 
     const result = await resetPassword(token, password);
-    console.log("[POST /api/auth/reset-password] Success");
-
     res.json(successResponse(result.message, null));
   } catch (error: any) {
-    console.error("[POST /api/auth/reset-password] Failed:", error.message);
     res
       .status(400)
       .json(errorResponse(error.message || "Server error resetting password"));
@@ -387,7 +429,6 @@ export const resetPasswordWithToken = async (req: Request, res: Response) => {
  * @access  Private
  */
 export const getCurrentUser = async (req: Request, res: Response) => {
-  console.log("[GET /api/auth/me] Starting - Account:", req.account?.id);
   try {
     const account = await prisma.account.findUnique({
       where: { id: req.account.id },
@@ -401,18 +442,21 @@ export const getCurrentUser = async (req: Request, res: Response) => {
         isEmailVerified: true,
         status: true,
         createdAt: true,
+        churchAdmin: {
+          select: {
+            title: true,
+            churchId: true,
+          },
+        },
       },
     });
 
     if (!account) {
-      console.error("[GET /api/auth/me] Failed: Account not found");
       return res.status(404).json(errorResponse("Account not found"));
     }
-    console.log("[GET /api/auth/me] Success");
 
     res.json(successResponse("User fetched successfully", { user: account }));
   } catch (error: any) {
-    console.error("[GET /api/auth/me] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching user"));

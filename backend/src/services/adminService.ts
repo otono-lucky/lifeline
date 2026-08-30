@@ -1,4 +1,4 @@
-// services/dashboard.service.ts
+// services/adminService.ts
 // SuperAdmin dashboard aggregated stats
 
 import { prisma } from "../config/db";
@@ -8,7 +8,6 @@ import { calculateAge } from "../utils/ageUtils";
  * Get SuperAdmin dashboard statistics
  */
 export const getSuperAdminDashboard = async () => {
-  // Run all queries in parallel for performance
   const [
     totalChurches,
     activeChurches,
@@ -67,6 +66,7 @@ export const getSuperAdminDashboard = async () => {
         id: true,
         officialName: true,
         aka: true,
+        churchModel: true,
         status: true,
         createdAt: true,
       },
@@ -74,13 +74,13 @@ export const getSuperAdminDashboard = async () => {
 
     prisma.user.findMany({
       take: 5,
-      orderBy: { account: {createdAt: "desc"} },
+      orderBy: { account: { createdAt: "desc" } },
       select: {
         accountId: true,
         gender: true,
         dateOfBirth: true,
         isVerified: true,
-        verificationStatus: true,
+        vettingStatus: true,
         account: {
           select: {
             firstName: true,
@@ -149,24 +149,33 @@ export const getPlatformStats = async (period?: "day" | "week" | "month") => {
       startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
   }
 
-  const [newChurches, newUsers, newCounselors] = await Promise.all([
+  const [newUsers, newChurches, newMatches] = await Promise.all([
+    prisma.account.count({
+      where: {
+        role: "User",
+        createdAt: { gte: startDate },
+      },
+    }),
     prisma.church.count({
-      where: { createdAt: { gte: startDate } },
+      where: {
+        createdAt: { gte: startDate },
+      },
     }),
-    prisma.user.count({
-      where: { account: {createdAt: { gte: startDate }} },
-    }),
-    prisma.counselor.count({
-      where: { account: {createdAt: { gte: startDate }} },
+    prisma.match.count({
+      where: {
+        createdAt: { gte: startDate },
+      },
     }),
   ]);
 
   return {
-    period,
+    period: period || "week",
     startDate,
     endDate: now,
-    newChurches,
-    newUsers,
-    newCounselors,
+    stats: {
+      newUsers,
+      newChurches,
+      newMatches,
+    },
   };
 };

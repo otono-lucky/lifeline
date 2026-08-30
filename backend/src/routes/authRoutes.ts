@@ -1,43 +1,45 @@
-// routes/auth.routes.ts
-// Complete authentication routes
+// routes/authRoutes.ts
+// Authentication routes
 
 import express from "express";
 import {
   signup,
   login,
-  requestVerification,
   verifyEmailToken,
+  requestVerification,
   forgotPassword,
   resetPasswordWithToken,
   getCurrentUser,
+  leadRegister,
+  socialLogin,
 } from "../controllers/authController";
 import authMiddleware from "../middleware/authMiddleware";
+import { validateBody } from "../middleware/validate";
+import {
+  LeadRegisterSchema,
+  SocialLoginSchema,
+  SignupSchema,
+  LoginSchema,
+  RequestVerificationSchema,
+  ForgotPasswordSchema,
+  ResetPasswordSchema,
+} from "../schemas/auth.schema";
 
 const router = express.Router();
 
-// ============= PUBLIC ROUTES =============
+// Strategic Onboarding & Lead Recovery
+router.post("/lead-register", validateBody(LeadRegisterSchema), leadRegister);
+router.post("/social-login", validateBody(SocialLoginSchema), socialLogin);
 
-// Register
-router.post("/signup", signup);
-
-// Login
-router.post("/login", login);
-
-// Request email verification (resend)
-router.post("/request-verification", requestVerification);
-
-// Verify email with token
+// Core Auth
+router.post("/signup", validateBody(SignupSchema), signup);
+router.post("/login", validateBody(LoginSchema), login);
 router.get("/verify-email/:token", verifyEmailToken);
+router.post("/request-verification", validateBody(RequestVerificationSchema), requestVerification);
+router.post("/forgot-password", validateBody(ForgotPasswordSchema), forgotPassword);
+router.post("/reset-password", validateBody(ResetPasswordSchema), resetPasswordWithToken);
 
-// Forgot password (request reset)
-router.post("/forgot-password", forgotPassword);
-
-// Reset password with token
-router.post("/reset-password", resetPasswordWithToken);
-
-// ============= PROTECTED ROUTES =============
-
-// Get current user
+// Protected routes
 router.get("/me", authMiddleware, getCurrentUser);
 
 export default router;

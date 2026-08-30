@@ -1,4 +1,4 @@
-// Prisma Schema - Clean Invite + Registration Flow
+// Prisma Schema - Full Architecture with 1:1 ChurchAdmin + Pastoral Title & Complete Lifecycle
 
 generator client {
   provider = "prisma-client-js"
@@ -15,6 +15,11 @@ enum Role {
   ChurchAdmin
   Counselor
   User
+}
+
+enum ChurchModelType {
+  PARENT_BRANCH       // e.g., RCCG with custom parish/branch input
+  INDIVIDUAL_PARISH   // e.g., Catholic, Anglican, Baptist with designated local counselor
 }
 
 enum InviteType {
@@ -34,13 +39,26 @@ enum MatchPreferenceType {
   other_churches
 }
 
+enum SalaryRange {
+  RANGE_0_100K        // 0 - 100k
+  RANGE_100K_500K     // 100k - 500k
+  RANGE_500K_1M       // 500k - 1M
+  RANGE_1M_PLUS       // 1M+
+}
+
 enum SubscriptionTierType {
   free
   premium
 }
 
+enum SubscriptionPlanInterval {
+  MONTHLY
+  YEARLY
+}
+
 enum SubscriptionStatusType {
   active
+  past_due
   expired
   canceled
 }
@@ -52,63 +70,85 @@ enum StatusType {
   deleted
 }
 
-enum VerificationStatus {
-  pending
-  in_progress
-  verified
-  rejected
+enum UserVettingStatus {
+  DRAFT               // Profile incomplete (< 100%)
+  PENDING_VETTING     // 100% complete, awaiting counselor call
+  VETTED_ACTIVE       // Counselor approved, active in discovery
+  REJECTED            // Counselor logged rejection reason
+  HARD_BLOCKED        // Non-serious / troll account; appeals process enabled
+  DEBRIEF_REQUIRED    // Exited a match, must complete counselor debrief before re-indexing
 }
 
 enum MatchStatus {
   AWAITING_DECISIONS
   WAITING_FOR_OTHER
   MUTUAL_ACCEPTED
-  DECLINED
-  EXPIRED
   IN_CONVERSATION
   COURTSHIP
   MARRIED
+  ENDED
+  DECLINED
+  EXPIRED
 }
 
-enum MatchDecision {
+
+enum MatchRequestStatus {
   PENDING
   ACCEPTED
   DECLINED
+  CANCELLED
+  SUPERSEDED          // Auto-cancelled when either party accepts another request
+}
+
+enum ChannelType {
+  COUPLE_PRIVATE      // Direct encrypted chat between matched couple
+  COUNSELOR_GROUP     // 4-party channel (Couple + Counselor A + Counselor B)
+}
+
+enum EventStatus {
+  PROPOSED
+  CONFIRMED
+  CANCELLED
+  COMPLETED
 }
 
 // ============= AUTH TABLE =============
 
 model Account {
-  id        String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email     String  @unique
-  password  String
-  firstName String
-  lastName  String
-  phone     String?
-  role      Role
+  id                          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                       String    @unique
+  password                    String?   // Optional for OAuth users
+  authProvider                String    @default("local") // local, google, apple
+  authProviderId              String?
+  firstName                   String
+  lastName                    String
+  phone                       String?
+  role                        Role
+  status                      StatusType @default(pending)
 
   // Email verification
-  isEmailVerified         Boolean   @default(false)
-  emailVerificationToken  String?   @unique
-  emailVerificationExpiry DateTime?
+  isEmailVerified             Boolean   @default(false)
+  emailVerificationToken      String?   @unique
+  emailVerificationExpiry     DateTime?
   emailVerificationLastSentAt DateTime?
 
   // Password reset
-  passwordResetToken  String?   @unique
-  passwordResetExpiry DateTime?
+  passwordResetToken          String?   @unique
+  passwordResetExpiry         DateTime?
 
-  status    StatusType @default(pending)
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt                   DateTime  @default(now())
+  updatedAt                   DateTime  @updatedAt
 
-  // Role-specific profiles
-  superAdmin  SuperAdmin?
-  churchAdmin ChurchAdmin?
-  counselor   Counselor?
-  user        User?
+  // 1:1 Role profiles
+  superAdmin                  SuperAdmin?
+  churchAdmin                 ChurchAdmin?
+  counselor                   Counselor?
+  user                        User?
 
-  // Invites created by this account (if admin)
-  invitesCreated Invite[] @relation("CreatedBy")
+  // Relations
+  invitesCreated              Invite[]  @relation("CreatedBy")
+  messagesSent                Message[]
+  eventsProposed              CalendarEvent[] @relation("ProposedBy")
 
   @@map("accounts")
 }
@@ -116,102 +156,196 @@ model Account {
 // ============= ROLE TABLES =============
 
 model SuperAdmin {
-  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId String @unique @db.Uuid
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId       String   @unique @db.Uuid
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-
+  account         Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
   churchesCreated Church[]
 
   @@map("super_admins")
 }
 
 model ChurchAdmin {
-  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId String @unique @db.Uuid
-  churchId  String @db.Uuid
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId String   @unique @db.Uuid
+  churchId  String   @unique @db.Uuid // STRICT 1:1 WITH CHURCH
+  title     String?  // Optional: Pastor, Reverend, Priest, Bishop, Elder
 
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  church  Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  church    Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
 
-  @@index([churchId])
   @@map("church_admins")
 }
 
 model Counselor {
-  id        String @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId String @unique @db.Uuid
-  churchId  String @db.Uuid
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId      String             @unique @db.Uuid
+  churchId       String             @db.Uuid
+  bio            String?
 
-  bio             String?
-
-  account       Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  church        Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  assignedUsers User[]  @relation("AssignedUsers")
-  createdMatches Match[]
+  account        Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  church         Church             @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  assignedUsers  User[]             @relation("AssignedUsers")
+  createdMatches Match[]            @relation("CounselorMatches")
+  vettingLogs    VettingLog[]
+  debriefs       CounselorDebrief[]
 
   @@index([churchId])
   @@map("counselors")
 }
 
 model User {
-  id        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId String     @unique @db.Uuid
-  gender    GenderType
-  dateOfBirth DateTime?
+  id                          String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  accountId                   String                   @unique @db.Uuid
+  gender                      GenderType
+  dateOfBirth                 DateTime?
 
-  // Nigerian Location
-  originCountry String?
-  originState   String?
-  originLga     String?
+  // Progressive Onboarding & Profile Gate
+  onboardingStep              Int                      @default(1)
+  profileCompletionPercentage Int                      @default(0)
+  isDiscoveryIndexed          Boolean                  @default(false)
+  vettingStatus               UserVettingStatus        @default(DRAFT)
+  verificationNotes           String?
+  whatsappNumber              String?
 
-  residenceCountry String?
-  residenceState   String?
-  residenceCity    String?
-  residenceAddress String?
+  // Church Selection
+  churchId                    String?                  @db.Uuid
+  church                      Church?                  @relation("ChurchMembers", fields: [churchId], references: [id])
+  branchName                  String?                  // For Parent-Branch models (e.g. RCCG Parish Name)
 
-  // Dating Profile
-  occupation      String?
-  interests       Json?
-  matchPreference MatchPreferenceType?
-  profilePictureUrl String?
-  videoIntroUrl     String?
+  // Financial & Professional Integrity (Privacy Firewall)
+  occupation                  String?
+  salaryRange                 SalaryRange?             // VISIBLE ONLY TO COUNSELOR
+
+  // Geographic & Physical Footprint
+  originCountry               String?
+  originState                 String?
+  originLga                   String?
+  residenceCountry            String?
+  residenceState              String?
+  residenceCity               String?
+  residenceAddress            String?
+  residenceLatitude           Float?
+  residenceLongitude          Float?
+  residencePlaceId            String?
+  residenceFormattedAddress   String?
+
+  // Dating Profile & Media
+  interests                   Json?
+  matchPreference             MatchPreferenceType?
+  profilePictureUrl           String?                  // Primary avatar
+  videoIntroUrl               String?
+  videoDurationSeconds        Int?
 
   // Subscription
-  subscriptionTier      SubscriptionTierType   @default(free)
-  subscriptionStatus    SubscriptionStatusType @default(active)
-  subscriptionExpiresAt DateTime?
+  subscriptionTier            SubscriptionTierType     @default(free)
+  subscriptionInterval        SubscriptionPlanInterval?
+  subscriptionStatus          SubscriptionStatusType   @default(active)
+  subscriptionExpiresAt       DateTime?
 
-  // Verification
-  isVerified         Boolean   @default(false)
-  verificationStatus String    @default("pending") // pending, in_progress, verified, rejected
-  verificationNotes  String? // Counselor's notes
-  verifiedAt         DateTime?
+  // Verification & Counselor Assignment
+  isVerified                  Boolean                  @default(false)
+  verifiedAt                  DateTime?
+  assignedCounselorId         String?                  @db.Uuid
+  assignedCounselor           Counselor?               @relation("AssignedUsers", fields: [assignedCounselorId], references: [id])
 
-  assignedCounselorId String?    @db.Uuid
-  assignedCounselor   Counselor? @relation("AssignedUsers", fields: [assignedCounselorId], references: [id])
-
-  churchId String? @db.Uuid
-  church   Church? @relation("ChurchMembers", fields: [churchId], references: [id])
-
-  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  socialMediaHandles UserSocialMedia[]
-  matchParticipations MatchParticipant[]
+  // Relations
+  account                     Account                  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  photos                      UserPhoto[]
+  socialMediaHandles          UserSocialMedia[]
+  sentRequests                MatchRequest[]           @relation("SentRequests")
+  receivedRequests            MatchRequest[]           @relation("ReceivedRequests")
+  matchParticipations         MatchParticipant[]
+  vettingLogs                 VettingLog[]
+  appealRequests              AppealRequest[]
+  debriefs                    CounselorDebrief[]
 
   @@index([churchId])
+  @@index([vettingStatus])
+  @@index([isDiscoveryIndexed])
   @@map("users")
 }
 
+model UserPhoto {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String   @db.Uuid
+  url       String
+  order     Int      // 1, 2, or 3 (Exactly 3 photos required)
+  publicId  String?
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, order])
+  @@map("user_photos")
+}
+
+// ============= CHURCH MODEL =============
+
+model Church {
+  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  officialName String
+  aka          String?
+  churchModel  ChurchModelType @default(INDIVIDUAL_PARISH)
+  email        String          @unique
+  phone        String
+
+  // Address
+  state        String
+  lga          String?
+  city         String?
+  address      String?
+
+  status       StatusType      @default(pending)
+
+  createdBy    String          @db.Uuid
+  creator      SuperAdmin      @relation(fields: [createdBy], references: [id])
+
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  // Relations (1:1 ChurchAdmin, 1:N Counselors & Members)
+  churchAdmin  ChurchAdmin?    // STRICT 1:1
+  counselors   Counselor[]
+  members      User[]          @relation("ChurchMembers")
+  invites      Invite[]
+
+  @@map("churches")
+}
+
+// ============= MATCHMAKING & REQUEST ENGINE =============
+
+model MatchRequest {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  senderId     String             @db.Uuid
+  receiverId   String             @db.Uuid
+  status       MatchRequestStatus @default(PENDING)
+  declinedAt   DateTime?
+  supersededAt DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  sender       User               @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver     User               @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@index([senderId, status])
+  @@index([receiverId, status])
+  @@map("match_requests")
+}
+
 model Match {
-  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  status       MatchStatus @default(AWAITING_DECISIONS)
-  counselorId  String?     @db.Uuid
-  createdAt    DateTime    @default(now())
-  endedAt      DateTime?
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  status             MatchStatus        @default(IN_CONVERSATION)
+  counselorId        String?            @db.Uuid
+  createdAt          DateTime           @default(now())
+  endedAt            DateTime?
   compatibilityScore Int?
 
-  counselor    Counselor?        @relation(fields: [counselorId], references: [id], onDelete: SetNull)
-  participants MatchParticipant[]
+  counselor          Counselor?         @relation("CounselorMatches", fields: [counselorId], references: [id], onDelete: SetNull)
+  participants       MatchParticipant[]
+  conversations      Conversation[]
+  calendarEvents     CalendarEvent[]
+  debriefs           CounselorDebrief[]
 
   @@index([status])
   @@index([counselorId])
@@ -219,93 +353,172 @@ model Match {
 }
 
 model MatchParticipant {
-  id         String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  matchId    String        @db.Uuid
-  userId     String        @db.Uuid
-  decision   MatchDecision @default(PENDING)
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  matchId    String   @db.Uuid
+  userId     String   @db.Uuid
   feedback   String?
   notes      String?
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match      Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([matchId, userId])
   @@index([userId])
-  @@index([decision])
   @@map("match_participants")
+}
+
+// ============= COMMUNICATIONS & CALENDAR =============
+
+model Conversation {
+  id           String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  matchId      String                    @db.Uuid
+  type         ChannelType
+  createdAt    DateTime                  @default(now())
+  updatedAt    DateTime                  @updatedAt
+
+  match        Match                     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([matchId])
+  @@map("conversations")
+}
+
+model ConversationParticipant {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String       @db.Uuid
+  accountId      String       @db.Uuid
+  roleInChat     String       // COUPLE_MEMBER, COUNSELOR, OBSERVER
+  joinedAt       DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, accountId])
+  @@map("conversation_participants")
+}
+
+model Message {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  conversationId String       @db.Uuid
+  senderId       String       @db.Uuid
+  content        String
+  mediaUrl       String?
+  readAt         DateTime?
+  createdAt      DateTime     @default(now())
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender         Account      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model CalendarEvent {
+  id           String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  matchId      String      @db.Uuid
+  proposedById String      @db.Uuid
+  title        String
+  description  String?
+  startTime    DateTime
+  endTime      DateTime
+  status       EventStatus @default(PROPOSED)
+  meetingLink  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  match        Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  proposedBy   Account     @relation("ProposedBy", fields: [proposedById], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
+  @@map("calendar_events")
+}
+
+// ============= VETTING, APPEALS & DEBRIEFS =============
+
+model VettingLog {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String   @db.Uuid
+  counselorId String   @db.Uuid
+  action      String   // APPROVED, REJECTED, HARD_BLOCKED
+  reason      String?
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  counselor   Counselor @relation(fields: [counselorId], references: [id], onDelete: Cascade)
+
+  @@map("vetting_logs")
+}
+
+model AppealRequest {
+  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                 String   @db.Uuid
+  appealReason           String
+  status                 String   @default("PENDING") // PENDING, APPROVED, REJECTED
+  reviewedBySuperAdminId String?  @db.Uuid
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("appeal_requests")
+}
+
+model CounselorDebrief {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  matchId               String    @db.Uuid
+  userId                String    @db.Uuid
+  counselorId           String    @db.Uuid
+  notes                 String
+  readinessScore        Int?      // 1 - 10
+  clearedForDiscoveryAt DateTime?
+  createdAt             DateTime  @default(now())
+
+  match                 Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  counselor             Counselor @relation(fields: [counselorId], references: [id], onDelete: Cascade)
+
+  @@map("counselor_debriefs")
 }
 
 model UserSocialMedia {
   id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId      String   @db.Uuid
-  platform    String
+  platform    String   // LinkedIn, Instagram, Facebook
   handleOrUrl String
   createdAt   DateTime @default(now())
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("user_social_media")
 }
 
-// ============= CHURCH MODEL =============
-
-model Church {
-  id           String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  officialName String
-  aka          String?
-  email        String  @unique
-  phone        String
-
-  // Nigerian Address
-  state   String
-  lga     String?
-  city    String?
-  address String?
-
-  status StatusType @default(pending)
-
-  createdBy String     @db.Uuid
-  creator   SuperAdmin @relation(fields: [createdBy], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relations
-  churchAdmins ChurchAdmin[]
-  counselors   Counselor[]
-  members      User[]        @relation("ChurchMembers")
-  invites      Invite[]
-
-  @@map("churches")
-}
-
 // ============= INVITE SYSTEM =============
-// Generic invite system - used for both ChurchAdmin and Counselor invites
 
 model Invite {
-  id    String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  token String     @unique
-  type  InviteType
-  email String
+  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  token              String     @unique
+  type               InviteType
+  email              String
 
-  // Church context (required for ChurchAdmin and Counselor)
-  churchId String? @db.Uuid
-  church   Church? @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  // Church context
+  churchId           String?    @db.Uuid
+  church             Church?    @relation(fields: [churchId], references: [id], onDelete: Cascade)
 
-  // Who created this invite
-  createdByAccountId String  @db.Uuid
-  createdBy          Account @relation("CreatedBy", fields: [createdByAccountId], references: [id])
+  // Creator
+  createdByAccountId String     @db.Uuid
+  createdBy          Account    @relation("CreatedBy", fields: [createdByAccountId], references: [id])
 
   // Status
-  used      Boolean   @default(false)
-  usedAt    DateTime?
-  expiresAt DateTime
+  used               Boolean    @default(false)
+  usedAt             DateTime?
+  expiresAt          DateTime
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   @@map("invites")
 }

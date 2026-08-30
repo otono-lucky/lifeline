@@ -167,7 +167,7 @@ export const getMembers = async (req: Request<Params>, res: Response) => {
 
     const result = await getChurchMembers(req.account.id, {
       churchId: id,
-      verificationStatus: verificationStatus as string,
+      vettingStatus: (verificationStatus || req.query.vettingStatus) as string,
       page: page ? parseInt(page as string) : undefined,
       limit: limit ? parseInt(limit as string) : undefined,
     });

@@ -1,44 +1,36 @@
-// controllers/counselorController.ts
+// controllers/counsellorController.ts
 // Counselor endpoints with unified responses
 
 import { Request, Response } from "express";
 import {
   getCounselorDashboard,
   getAssignedUsers,
-  verifyUser,
-  getCounselorsByChurch,
   getCounselorById,
   updateCounselor,
+  getCounselorsByChurch,
   getCounselors,
 } from "../services/counsellorService";
 import { createCounselor } from "../services/accountService";
-import { updateAccountStatus } from "../services/accountService";
 import { generateToken } from "../utils/tokenManager";
 import { successResponse, errorResponse } from "../utils/responseHandler";
-import { prisma } from "../config/db";
 import { Params } from "../types/express";
-import { StatusType } from "@prisma/client";
+import { prisma } from "../config/db";
 import { STATUS_TYPES } from "../constants";
+import { StatusType, UserVettingStatus } from "@prisma/client";
 
 /**
- * @desc    Get counselor dashboard
+ * @desc    Get Counselor dashboard
  * @route   GET /api/counselor/dashboard
- * @access  Counselor
+ * @access  Counselor, ChurchAdmin
  */
-export const getDashboard = async (
-  req: Request<{ id?: string }>,
-  res: Response,
-) => {
-  console.log(
-    "[CounselorController] getDashboard - CounselorId:",
-    req.account?.id,
-  );
+export const getDashboard = async (req: Request, res: Response) => {
   try {
-    const dashboard = await getCounselorDashboard(req.account.id, req.params.id);
-
+    const dashboard = await getCounselorDashboard(
+      req.account.id,
+      req.params?.id as string | undefined,
+    );
     res.json(successResponse("Dashboard data fetched successfully", dashboard));
   } catch (error: any) {
-    console.error("[GET /api/counselor/dashboard] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching dashboard"));
@@ -54,23 +46,16 @@ export const getMyAssignedUsers = async (
   req: Request<{ id?: string }>,
   res: Response,
 ) => {
-  console.log(
-    "[GET /api/counselor/assigned-users] getMyAssignedUsers - CounselorId:",
-    req.account?.id,
-  );
   try {
-    const { verificationStatus, page, limit } = req.query;
+    const { verificationStatus, vettingStatus, page, limit } = req.query;
     const { id } = req.params;
 
     const result = await getAssignedUsers(req.account.id, id, {
-      verificationStatus: verificationStatus as string,
-      page: page ? parseInt(page as string) : undefined,
-      limit: limit ? parseInt(limit as string) : undefined,
+      vettingStatus: (vettingStatus || verificationStatus) as UserVettingStatus,
+      page: page ? parseInt(page as string, 10) : undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
     });
-    console.log(
-      "[GET /api/counselor/assigned-users] Success - Count:",
-      result.users.length,
-    );
+
     res.json(
       successResponse(
         "Assigned users fetched successfully",
@@ -79,7 +64,6 @@ export const getMyAssignedUsers = async (
       ),
     );
   } catch (error: any) {
-    console.error("[GET /api/counselor/assigned-users] Failed:", error.message);
     res
       .status(500)
       .json(
@@ -88,52 +72,67 @@ export const getMyAssignedUsers = async (
   }
 };
 
+
+
 /**
- * @desc    Verify or reject user
- * @route   POST /api/counselor/verify-user/:userId
- * @access  Counselor
+ * @desc    Get single counselor by ID
+ * @route   GET /api/counselor/:id
+ * @access  Counselor (own profile), ChurchAdmin, SuperAdmin
  */
-export const verifyUserStatus = async (
-  req: Request<{ userId: string }>,
+export const getCounselorDetails = async (
+  req: Request,
   res: Response,
 ) => {
-  console.log(
-    "[CounselorController] verifyUserStatus - UserId:",
-    req.params?.userId,
-    "Status:",
-    req.body?.status,
-  );
   try {
-    const { userId } = req.params;
-    const { status, notes } = req.body;
+    const id = req.params.id as string;
 
-    if (!status || !["verified", "rejected"].includes(status)) {
+    if (req.account.role === "Counselor" && req.account.id !== id) {
       return res
-        .status(400)
-        .json(
-          errorResponse("Invalid status. Must be 'verified' or 'rejected'"),
-        );
+        .status(403)
+        .json(errorResponse("You can only view your own profile"));
     }
 
-    const result = await verifyUser(req.account.id, userId, status, notes);
-    console.log(
-      "[POST /api/counselor/verify-user/:userId] Success - UserId:",
-      userId,
-    );
+    const counselor = await getCounselorById(id);
     res.json(
-      successResponse(
-        `User ${status === "verified" ? "verified" : "rejected"} successfully`,
-        result,
-      ),
+      successResponse("Counselor fetched successfully", { counselor }),
     );
   } catch (error: any) {
-    console.error(
-      "[POST /api/counselor/verify-user/:userId] Failed:",
-      error.message,
-    );
+    if (error.message === "Counselor not found") {
+      return res.status(404).json(errorResponse(error.message));
+    }
     res
-      .status(400)
-      .json(errorResponse(error.message || "Server error verifying user"));
+      .status(500)
+      .json(errorResponse(error.message || "Server error fetching counselor"));
+  }
+};
+
+/**
+ * @desc    Update counselor details
+ * @route   PUT /api/counselor/:id
+ * @access  Counselor (own profile), ChurchAdmin, SuperAdmin
+ */
+export const updateCounselorDetails = async (
+  req: Request,
+  res: Response,
+) => {
+  try {
+    const id = req.params.id as string;
+    const { bio } = req.body;
+
+    if (req.account.role === "Counselor" && req.account.id !== id) {
+      return res
+        .status(403)
+        .json(errorResponse("You can only update your own profile"));
+    }
+
+    const counselor = await updateCounselor(id, { bio });
+    res.json(
+      successResponse("Counselor updated successfully", { counselor }),
+    );
+  } catch (error: any) {
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error updating counselor"));
   }
 };
 
@@ -143,12 +142,6 @@ export const verifyUserStatus = async (
  * @access  ChurchAdmin, SuperAdmin
  */
 export const createCounselorAccount = async (req: Request, res: Response) => {
-  console.log(
-    "[CounselorController] createCounselorAccount - ChurchId:",
-    req.body?.churchId,
-    "Email:",
-    req.body?.email,
-  );
   try {
     const {
       churchId,
@@ -158,13 +151,26 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
       lastName,
       phone,
       bio,
-      yearsExperience,
     } = req.body;
 
-    if (!churchId || !email || !password || !firstName || !lastName) {
-      console.error(
-        "[POST /api/counselor/create-account] Failed: Missing required fields",
-      );
+    let targetChurchId = churchId;
+
+    if (req.account.role === "ChurchAdmin") {
+      const churchAdmin = await prisma.churchAdmin.findUnique({
+        where: { accountId: req.account.id },
+        select: { churchId: true },
+      });
+
+      if (!churchAdmin) {
+        return res
+          .status(403)
+          .json(errorResponse("Church admin profile not found"));
+      }
+
+      targetChurchId = churchAdmin.churchId;
+    }
+
+    if (!targetChurchId || !email || !password || !firstName || !lastName) {
       return res.status(400).json(
         errorResponse("Missing required fields", {
           required: ["churchId", "email", "password", "firstName", "lastName"],
@@ -173,7 +179,7 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
     }
 
     const result = await createCounselor({
-      churchId,
+      churchId: targetChurchId,
       email,
       password,
       firstName,
@@ -183,17 +189,12 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
       role: "Counselor",
     });
 
-    // Generate login token
     const token = generateToken({
       id: result.account.id,
       email: result.account.email,
       role: result.account.role,
       firstName: result.account.firstName,
     });
-    console.log(
-      "[POST /api/counselor/create] Success - CounselorId:",
-      result.account.id,
-    );
 
     res.status(201).json(
       successResponse("Counselor account created successfully", {
@@ -206,13 +207,12 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
         },
         counselor: {
           accountId: result.account.id,
-          bio: result.counselor.bio,
+          churchId: result.counselor.churchId,
         },
         token,
       }),
     );
   } catch (error: any) {
-    console.error("[POST /api/counselor/create] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error creating counselor"));
@@ -220,52 +220,44 @@ export const createCounselorAccount = async (req: Request, res: Response) => {
 };
 
 /**
- * @desc    Get counselors for a church
- * @route   GET /api/counselor/list
- * @access  ChurchAdmin, SuperAdmin
+ * @desc    Get all counselors (SuperAdmin only)
+ * @route   GET /api/counselor/list-all
+ * @access  SuperAdmin
  */
 export const getAllCounselors = async (req: Request, res: Response) => {
-  console.log(
-    "[GET /api/counselor/list-all] Starting - Role:",
-    req.account?.role,
-  );
   try {
     const { status, page, limit } = req.query;
 
-    if (status && !STATUS_TYPES.includes(status as string)) {
-      console.log("[GET /api/counselor] Failed: Invalid status");
+    if (status && !STATUS_TYPES.includes(status as any)) {
       return res
         .status(400)
         .json(
           errorResponse(
-            "Invalid status. Must be 'pending, 'active', 'suspended'",
+            "Invalid status. Must be 'pending', 'active', 'suspended', 'deleted'",
           ),
         );
     }
 
-    // Only super admin can get all counselors
     const superAdmin = await prisma.superAdmin.findUnique({
       where: { accountId: req.account.id },
     });
 
     if (!superAdmin) {
-      console.log("[GET /api/counselor] Failed: super admin profile not found");
       return res
         .status(403)
-        .json(errorResponse("Church admin profile not found"));
+        .json(errorResponse("Super admin profile required"));
     }
 
     const counselors = await getCounselors({
       status: status as StatusType,
-      page: page ? parseInt(page as string) : undefined,
-      limit: limit ? parseInt(limit as string) : undefined,
+      page: page ? parseInt(page as string, 10) : undefined,
+      limit: limit ? parseInt(limit as string, 10) : undefined,
     });
 
     res.json(
       successResponse("Counselors fetched successfully", { counselors }),
     );
   } catch (error: any) {
-    console.error("[GET /api/counselor] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching counselors"));
@@ -278,28 +270,13 @@ export const getAllCounselors = async (req: Request, res: Response) => {
  * @access  ChurchAdmin, SuperAdmin
  */
 export const list = async (req: Request, res: Response) => {
-  console.log("[GET /api/counselor/list] Starting - Role:", req.account?.role);
   try {
-    const { churchId } = req.query;
+    let churchId = req.query.churchId as string | undefined;
 
-    let targetChurchId: string;
-
-    // If SuperAdmin, churchId is required in query
-    if (req.account.role === "SuperAdmin") {
-      if (!churchId) {
-        return res
-          .status(400)
-          .json(
-            errorResponse(
-              "churchId query parameter is required for SuperAdmin",
-            ),
-          );
-      }
-      targetChurchId = churchId as string;
-    } else {
-      // ChurchAdmin - get their own church
+    if (req.account.role === "ChurchAdmin") {
       const churchAdmin = await prisma.churchAdmin.findUnique({
         where: { accountId: req.account.id },
+        select: { churchId: true },
       });
 
       if (!churchAdmin) {
@@ -308,137 +285,34 @@ export const list = async (req: Request, res: Response) => {
           .json(errorResponse("Church admin profile not found"));
       }
 
-      targetChurchId = churchAdmin.churchId;
+      churchId = churchAdmin.churchId;
     }
 
-    const counselors = await getCounselorsByChurch(targetChurchId);
+    if (!churchId) {
+      return res.status(400).json(errorResponse("churchId is required"));
+    }
 
+    const counselors = await getCounselorsByChurch(churchId);
     res.json(
       successResponse("Counselors fetched successfully", { counselors }),
     );
   } catch (error: any) {
-    console.error("[GET /api/counselor/list] Failed:", error.message);
     res
       .status(500)
       .json(errorResponse(error.message || "Server error fetching counselors"));
   }
 };
 
-/**
- * @desc    Get single counselor
- * @route   GET /api/counselor/:id
- * @access  ChurchAdmin, SuperAdmin, Counselor (own profile)
- */
-export const getOne = async (req: Request<Params>, res: Response) => {
-  console.log("[GET /api/counselor/:id] Starting - Id:", req.params?.id);
+export const getOne = getCounselorDetails;
+export const update = updateCounselorDetails;
+export const updateStatus = async (req: Request, res: Response) => {
   try {
-    const { id: accountId } = req.params;
-
-    const counselor = await getCounselorById(accountId);
-    console.log(
-      "[GET /api/counselor/:id] Success - AccountId:",
-      counselor.accountId,
-    );
-
-    res.json(successResponse("Counselor fetched successfully", { counselor }));
-  } catch (error: any) {
-    console.error("[GET /api/counselor/:id] Failed:", error.message);
-
-    if (error.message === "Counselor not found") {
-      return res.status(404).json(errorResponse(error.message));
-    }
-
-    res
-      .status(500)
-      .json(errorResponse(error.message || "Server error fetching counselor"));
-  }
-};
-
-/**
- * @desc    Update counselor details
- * @route   PUT /api/counselor/:id
- * @access  ChurchAdmin, Counselor (own profile)
- */
-export const update = async (req: Request<Params>, res: Response) => {
-  console.log("[PUT /api/counselor/:id] Starting - Id:", req.params?.id);
-  try {
-    const { id: accountId } = req.params;
-    const { bio } = req.body;
-
-    const counselor = await updateCounselor(accountId, {
-      bio,
-    });
-
-    res.json(successResponse("Counselor updated successfully", { counselor }));
-  } catch (error: any) {
-    console.error("[PUT /api/counselor/:id] Failed:", error.message);
-    res
-      .status(500)
-      .json(errorResponse(error.message || "Server error updating counselor"));
-  }
-};
-
-/**
- * @desc    Suspend/activate counselor account
- * @route   PATCH /api/counselor/:id/status
- * @access  ChurchAdmin, SuperAdmin
- */
-export const updateStatus = async (req: Request<Params>, res: Response) => {
-  console.log(
-    "[PATCH /api/counselor/:id/status] updateStatus - Id:",
-    req.params?.id,
-    "Status:",
-    req.body?.status,
-  );
-  try {
-    const { id: accountId } = req.params;
+    const { id } = req.params;
     const { status } = req.body;
-
-    if (!["active", "suspended"].includes(status)) {
-      return res
-        .status(400)
-        .json(errorResponse("Invalid status. Must be: active or suspended"));
-    }
-
-    // Get counselor to find their accountId
-    const counselorByAccount = await prisma.counselor.findUnique({
-      where: { accountId },
-      select: { id: true, accountId: true },
-    });
-
-    const counselor =
-      counselorByAccount ??
-      (await prisma.counselor.findUnique({
-        where: { id: accountId },
-        select: { id: true, accountId: true },
-      }));
-
-    if (!counselor) {
-      return res.status(404).json(errorResponse("Counselor not found"));
-    }
-
-    // Update account status
-    const account = await updateAccountStatus(counselor.accountId, status);
-    console.log(
-      "[PATCH /api/counselor/:id/status] Success - Id:",
-      counselor.id,
-      "Status:",
-      status,
-    );
-    res.json(
-      successResponse(
-        `Counselor ${status === "active" ? "activated" : "suspended"} successfully`,
-        { status: account.status },
-      ),
-    );
+    const { updateAccountStatus } = await import("../services/accountService");
+    const account = await updateAccountStatus(id as string, status);
+    res.json(successResponse("Counselor status updated", { account }));
   } catch (error: any) {
-    console.error("[PATCH /api/counselor/:id/status] Failed:", error.message);
-    res
-      .status(500)
-      .json(
-        errorResponse(
-          error.message || "Server error updating counselor status",
-        ),
-      );
+    res.status(500).json(errorResponse(error.message || "Server error updating status"));
   }
 };

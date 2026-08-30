@@ -5,11 +5,13 @@ import express from "express";
 import * as ChurchController from "../controllers/churchController";
 import authMiddleware from "../middleware/authMiddleware";
 import { requireSuperAdmin, requireAnyAdmin } from "../middleware/requireRole";
+import { validateBody } from "../middleware/validate";
+import { CreateChurchSchema, UpdateChurchSchema } from "../schemas/church.schema";
 
 const router = express.Router();
 
 // Create church
-router.post("/", authMiddleware, requireSuperAdmin, ChurchController.create);
+router.post("/", authMiddleware, requireSuperAdmin, validateBody(CreateChurchSchema), ChurchController.create);
 
 // List churches
 // Public list for signup and unauthenticated clients
@@ -21,7 +23,7 @@ router.get("/", authMiddleware, requireSuperAdmin, ChurchController.list);
 router.get("/:id", authMiddleware, requireAnyAdmin, ChurchController.getOne);
 
 // Update church
-router.put("/:id", authMiddleware, requireSuperAdmin, ChurchController.update);
+router.put("/:id", authMiddleware, requireSuperAdmin, validateBody(UpdateChurchSchema), ChurchController.update);
 router.patch(
   "/:id/status",
   authMiddleware,

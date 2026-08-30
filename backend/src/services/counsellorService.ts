@@ -1,7 +1,7 @@
 // services/counselorService.ts
 // Counselor business logic
 
-import { StatusType } from "@prisma/client";
+import { StatusType, UserVettingStatus } from "@prisma/client";
 import { prisma } from "../config/db";
 
 /**
@@ -11,7 +11,6 @@ export const getCounselorDashboard = async (
   requesterAccountId: string,
   requestedCounsellorAccountId?: string,
 ) => {
-  // Get counselor profile
   const counselorId = await resolveCounsellorScope(
     requesterAccountId,
     requestedCounsellorAccountId,
@@ -67,17 +66,17 @@ export const getCounselorDashboard = async (
 
   // Calculate stats
   const totalAssigned = counselor.assignedUsers.length;
-  const pending = counselor.assignedUsers.filter(
-    (u) => u.verificationStatus === "pending",
+  const pendingVetting = counselor.assignedUsers.filter(
+    (u) => u.vettingStatus === "PENDING_VETTING",
   ).length;
-  const inProgress = counselor.assignedUsers.filter(
-    (u) => u.verificationStatus === "in_progress",
-  ).length;
-  const verified = counselor.assignedUsers.filter(
-    (u) => u.verificationStatus === "verified",
+  const verifiedActive = counselor.assignedUsers.filter(
+    (u) => u.vettingStatus === "VETTED_ACTIVE",
   ).length;
   const rejected = counselor.assignedUsers.filter(
-    (u) => u.verificationStatus === "rejected",
+    (u) => u.vettingStatus === "REJECTED",
+  ).length;
+  const debriefRequired = counselor.assignedUsers.filter(
+    (u) => u.vettingStatus === "DEBRIEF_REQUIRED",
   ).length;
 
   return {
@@ -90,10 +89,10 @@ export const getCounselorDashboard = async (
     },
     stats: {
       totalAssigned,
-      pending,
-      inProgress,
-      verified,
+      pendingVetting,
+      verifiedActive,
       rejected,
+      debriefRequired,
       totalMatches,
       activeMatches,
     },
@@ -102,7 +101,7 @@ export const getCounselorDashboard = async (
       firstName: u.account.firstName,
       lastName: u.account.lastName,
       email: u.account.email,
-      verificationStatus: u.verificationStatus,
+      vettingStatus: u.vettingStatus,
       verificationNotes: u.verificationNotes,
       verifiedAt: u.verifiedAt,
       assignedAt: u.account.createdAt,
@@ -117,25 +116,24 @@ export const getAssignedUsers = async (
   accountId: string,
   requestedCounsellorAccountId?: string,
   filters?: {
-    verificationStatus?: string;
+    vettingStatus?: UserVettingStatus;
     page?: number;
     limit?: number;
   },
 ) => {
-  // Get counselor
   const counselorId = await resolveCounsellorScope(
     accountId,
     requestedCounsellorAccountId,
   );
-  
+
   const page = filters?.page || 1;
   const limit = filters?.limit || 20;
   const skip = (page - 1) * limit;
 
   const where: any = { assignedCounselorId: counselorId };
 
-  if (filters?.verificationStatus) {
-    where.verificationStatus = filters.verificationStatus;
+  if (filters?.vettingStatus) {
+    where.vettingStatus = filters.vettingStatus;
   }
 
   const [users, total] = await Promise.all([
@@ -167,7 +165,7 @@ export const getAssignedUsers = async (
       email: u.account.email,
       phone: u.account.phone,
       gender: u.gender,
-      verificationStatus: u.verificationStatus,
+      vettingStatus: u.vettingStatus,
       verificationNotes: u.verificationNotes,
       verifiedAt: u.verifiedAt,
       occupation: u.occupation,
@@ -193,7 +191,6 @@ export const verifyUser = async (
   status: "verified" | "rejected",
   notes?: string,
 ) => {
-  // Get counselor
   const counselor = await prisma.counselor.findUnique({
     where: { accountId: counselorAccountId },
     select: { id: true },
@@ -203,7 +200,6 @@ export const verifyUser = async (
     throw new Error("Counselor profile not found");
   }
 
-  // Verify user is assigned to this counselor
   const user = await resolveUserByIdentifier(userIdentifier);
 
   if (!user) {
@@ -214,14 +210,17 @@ export const verifyUser = async (
     throw new Error("User is not assigned to you");
   }
 
-  // Update user verification
+  const isVerified = status === "verified";
+  const vettingStatus: UserVettingStatus = isVerified ? "VETTED_ACTIVE" : "REJECTED";
+
   const updatedUser = await prisma.user.update({
     where: { id: user.id },
     data: {
-      verificationStatus: status,
+      vettingStatus,
+      isVerified,
+      isDiscoveryIndexed: isVerified,
       verificationNotes: notes,
-      verifiedAt: status === "verified" ? new Date() : null,
-      isVerified: status === "verified", // Update old field too
+      verifiedAt: isVerified ? new Date() : null,
     },
     include: {
       account: {
@@ -238,7 +237,7 @@ export const verifyUser = async (
     accountId: updatedUser.accountId,
     userName: `${updatedUser.account.firstName} ${updatedUser.account.lastName}`,
     email: updatedUser.account.email,
-    verificationStatus: updatedUser.verificationStatus,
+    vettingStatus: updatedUser.vettingStatus,
     verifiedAt: updatedUser.verifiedAt,
   };
 };
@@ -336,7 +335,6 @@ export const resolveCounsellorScope = async (
 
   if (!requester) throw new Error("Requester not found");
 
-  // Super admin → can view any counsellor
   if (requester.superAdmin) {
     if (!requestedCounsellorAccountId) {
       throw new Error("Super admin must provide counselor accountId");
@@ -351,7 +349,6 @@ export const resolveCounsellorScope = async (
     return counselor.id;
   }
 
-  // Church admin → can view counsellors in their church
   if (requester.churchAdmin) {
     if (!requestedCounsellorAccountId) {
       throw new Error("Church admin must provide counselor accountId");
@@ -369,7 +366,6 @@ export const resolveCounsellorScope = async (
     return counselor.id;
   }
 
-  // Counsellor → can only view themselves
   if (requester.counselor) {
     const ownId = requester.counselor.id;
 

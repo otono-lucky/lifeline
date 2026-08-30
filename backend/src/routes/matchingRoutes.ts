@@ -1,48 +1,61 @@
 import express from "express";
 import authMiddleware from "../middleware/authMiddleware";
 import { requireRole } from "../middleware/requireRole";
+import { requireProfileComplete } from "../middleware/requireProfileComplete";
+import { validateBody } from "../middleware/validate";
+import { EndRelationshipMatchSchema } from "../schemas/match.schema";
 import * as MatchingController from "../controllers/matchingController";
 
 const router = express.Router();
 
-router.get("/active", authMiddleware, MatchingController.getActive);
+// All matching routes require auth
+router.use(authMiddleware);
+
+// User-facing: get own active match (gate enforced)
+router.get("/active", requireProfileComplete, MatchingController.getActive);
+
+// User-facing: match history (gate enforced)
+router.get("/history", requireProfileComplete, MatchingController.getHistory);
+
+// User-facing: end active relationship
+router.post("/:matchId/end", requireProfileComplete, validateBody(EndRelationshipMatchSchema), MatchingController.endMatch);
+
+// User-facing: view match details
+router.get("/:matchId", requireProfileComplete, MatchingController.getMatchDetails);
+
+// User-facing: view a participant's profile within a match
+router.get(
+  "/:matchId/profile/:accountId",
+  requireProfileComplete,
+  MatchingController.getMatchProfile,
+);
+
+// Public profile view (within an existing match, elevated roles bypass gate)
+router.get(
+  "/public-profile/:accountId",
+  MatchingController.getPublicProfile,
+);
+
+// Elevated roles: view any user's active match
 router.get(
   "/active/:accountId",
-  authMiddleware,
   requireRole(["Counselor", "ChurchAdmin", "SuperAdmin"]),
   MatchingController.getActiveForAccount,
 );
-router.get("/history", authMiddleware, MatchingController.getHistory);
+
+// Elevated roles: view any user's match history
 router.get(
   "/history/:accountId",
-  authMiddleware,
   requireRole(["Counselor", "ChurchAdmin", "SuperAdmin"]),
   MatchingController.getHistoryForAccount,
 );
-router.post("/:matchId/decision", authMiddleware, MatchingController.decide);
-router.get(
-  "/:matchId/profile/:accountId",
-  authMiddleware,
-  MatchingController.getMatchProfile,
-);
-router.get(
-  "/public-profile/:accountId",
-  authMiddleware,
-  MatchingController.getPublicProfile,
-);
-router.get("/:matchId", authMiddleware, MatchingController.getMatchDetails);
 
-router.post(
-  "/",
-  authMiddleware,
-  requireRole(["Counselor", "ChurchAdmin", "SuperAdmin"]),
-  MatchingController.create,
-);
+// Admin/Counselor: list all matches
 router.get(
   "/",
-  authMiddleware,
   requireRole(["Counselor", "ChurchAdmin", "SuperAdmin"]),
   MatchingController.listAll,
 );
 
 export default router;
+
