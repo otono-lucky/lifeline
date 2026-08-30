@@ -2,6 +2,8 @@ import express from "express";
 import authMiddleware from "../middleware/authMiddleware";
 import { requireRole } from "../middleware/requireRole";
 import { requireProfileComplete } from "../middleware/requireProfileComplete";
+import { validateBody } from "../middleware/validate";
+import { EndRelationshipMatchSchema } from "../schemas/match.schema";
 import * as MatchingController from "../controllers/matchingController";
 
 const router = express.Router();
@@ -16,7 +18,7 @@ router.get("/active", requireProfileComplete, MatchingController.getActive);
 router.get("/history", requireProfileComplete, MatchingController.getHistory);
 
 // User-facing: end active relationship
-router.post("/:matchId/end", requireProfileComplete, MatchingController.endMatch);
+router.post("/:matchId/end", requireProfileComplete, validateBody(EndRelationshipMatchSchema), MatchingController.endMatch);
 
 // User-facing: view match details
 router.get("/:matchId", requireProfileComplete, MatchingController.getMatchDetails);

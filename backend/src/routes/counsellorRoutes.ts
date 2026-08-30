@@ -19,6 +19,12 @@ import {
   requireSuperAdmin,
   requireRole,
 } from "../middleware/requireRole";
+import { validateBody } from "../middleware/validate";
+import {
+  CreateCounselorSchema,
+  UpdateCounselorSchema,
+  UpdateCounselorStatusSchema,
+} from "../schemas/counselor.schema";
 
 const router = express.Router();
 const requireCounselorOrHigher = requireRole([
@@ -51,7 +57,7 @@ router.get(
 );
 
 // Create counselor (Admins)
-router.post("/create", authMiddleware, requireAnyAdmin, createCounselorAccount);
+router.post("/create", authMiddleware, requireAnyAdmin, validateBody(CreateCounselorSchema), createCounselorAccount);
 
 // List counselors (Admins)
 router.get("/list-all", authMiddleware, requireSuperAdmin, getAllCounselors);
@@ -61,9 +67,9 @@ router.get("/list", authMiddleware, requireAnyAdmin, list);
 router.get("/:id", authMiddleware, requireCounselorOrHigher, getOne);
 
 // Update counselor (Admins)
-router.put("/:id", authMiddleware, requireCounselorOrHigher, update);
+router.put("/:id", authMiddleware, requireCounselorOrHigher, validateBody(UpdateCounselorSchema), update);
 
 // Update status (Admins)
-router.patch("/:id/status", authMiddleware, requireAnyAdmin, updateStatus);
+router.patch("/:id/status", authMiddleware, requireAnyAdmin, validateBody(UpdateCounselorStatusSchema), updateStatus);
 
 export default router;

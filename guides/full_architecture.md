@@ -1,584 +1,796 @@
-# Faith-Based Matchmaking Platform: Full Backend Architecture Specification
+# System Architecture Document
+## Faith-Based Matchmaking Platform — Full Rebuild Specification
 
-## 1. Executive Architecture Overview
+**Purpose of this document:** This is the complete technical source of truth for rebuilding this platform from scratch — data model, every screen, every endpoint with request/response shapes, state machines, and business rules. Anyone (human or AI agent) should be able to build the entire system from this document alone.
 
-The platform is a multi-tenant, faith-based matchmaking and relationship mentoring ecosystem designed around three core pillars:
-1. **High-Trust Church Governance**: 1-to-1 Church-to-ChurchAdmin mapping with pastoral leadership titles (e.g., Pastor, Reverend, Priest), local counselor assignments, and multi-tier privacy firewalls.
-2. **Psychological Safety & Controlled Intentionality**: "Shame-Free" 3-slot request cap, blind rejections, and first-come acceptance concurrency resolution.
-3. **Progressive Onboarding & Vetting**: Step-1 lead capture for retention drip campaigns, a 100% profile update gate, multi-stage vetting (Counselor calls, 3 photos, <1 min liveness video, 2-of-3 verified socials), and post-match counselor-mediated debrief resets.
+**How to read it:** Sections are ordered so each builds on the last. Business-rule sections (church structure, vetting, discovery/matching) come before the screen and endpoint inventories, because the endpoints only make sense once the rules are understood.
 
 ---
 
-## 2. Role-Based Access Control (RBAC) & Entity Topology
+## 1. System Overview
 
-### Role Hierarchy & 1-to-1 Church Governance
-- **`SuperAdmin`**: Platform operator. Manages churches, global configurations, subscription plans, appeals, and system metrics.
-- **`ChurchAdmin` (1-to-1 with Church)**:
-  - Each `Church` has exactly **ONE** `ChurchAdmin` (1:1 relationship).
-  - Contains an optional `title` field (e.g., `Pastor`, `Reverend`, `Priest`, `Bishop`, `Elder`).
-  - Acts as the church auditor and supervisor.
-  - Excluded programmatically from matchmaking discovery pools.
-  - Governed by the **Restricted Analytics Privacy Tier** (can view basic directory and aggregate stats, but cannot see salary, residence address, match preferences, or external match identities).
-- **`Counselor`**:
-  - Belongs to a specific church (1:N from Church).
-  - Assigned to users for verification vetting, relationship oversight, and debrief resets.
-  - Granted full "Whole Data" access (Salary, Address, History) **only** for their assigned users and active moderated matches.
-- **`User`**:
-  - Registered member seeking courtship/marriage.
-  - Subject to the 100% profile gate, 3-slot active request limits, and post-match debrief requirements.
+Three components, one backend:
+
+```
+┌────────────────────┐      ┌─────────────────────────┐
+│    Mobile App        │      │   Admin Web App          │
+│  (Daters / Users)     │      │  (SuperAdmin,             │
+│  React Native/Expo    │─────▶│   Unified Church          │────▶  Backend API
+└────────────────────┘      │   Dashboard: ChurchAdmin, │      (Node/Express/
+                              │   Counselor, Pastor)      │       Prisma/Postgres)
+                              └─────────────────────────┘
+```
+
+All API responses use one envelope:
+```json
+{ "success": true, "message": "string", "data": {}, "errors": null }
+```
 
 ---
 
-## 3. Database Schema Blueprint (Prisma)
+## 2. User Roles & RBAC Matrix
+
+| Role | Created By | Has Dating Profile? | Appears in Discovery? | Portal |
+|---|---|---|---|---|
+| **SuperAdmin** | Seeded | No | No | Admin Web |
+| **ChurchAdmin** | SuperAdmin | No | No | Admin Web (Unified Dashboard) |
+| **Counselor** | ChurchAdmin/SuperAdmin | No | No | Admin Web (Unified Dashboard) |
+| **Pastor** | Captured at church onboarding, account created by ChurchAdmin/SuperAdmin | No | **No — structurally excluded** (Pastors have no row in the discovery-source table, so exclusion is guaranteed, not flag-based) | Admin Web (Unified Dashboard, read/audit-level access equal to Counselor) |
+| **User** | Self sign-up | Yes | Yes, once `vetted_active` | Mobile App |
+
+**Permission summary inside the Unified Church Dashboard:**
+
+| Data/Action | ChurchAdmin | Counselor | Pastor |
+|---|---|---|---|
+| Basic directory (name/photo) | ✅ | ✅ | ✅ |
+| Aggregated match counts | ✅ | ✅ | ✅ |
+| Search/match preferences | ❌ | ✅ (assigned users only) | ✅ |
+| External-church match partner identity | ❌ (hidden) | ✅ (assigned users only) | ✅ |
+| Salary, address, full social handles | ❌ | ✅ (assigned users only) | ✅ |
+| Assign member to counselor | ✅ | ❌ | ❌ |
+| Create/manage counselors | ✅ | ❌ | ❌ |
+| Run vetting decisions | ❌ | ✅ (assigned) | ✅ (any, as auditor) |
+| Excluded from being a match prospect | N/A | N/A | ✅ (by design) |
+
+---
+
+## 3. Data Model (Prisma-style schema)
+
+### 3.1 Enums
 
 ```prisma
-generator client {
-  provider = "prisma-client-js"
-}
+enum Role { SuperAdmin ChurchAdmin Counselor Pastor User }
+enum AccountStatus { active suspended }
+enum ChurchOnboardingType { ParentBranch Independent }
+enum ChurchStatus { pending active suspended }
+enum Gender { Male Female }
+enum IncomeRange { range_0_100k range_100k_500k range_500k_1m range_1m_plus }
+enum MatchScope { church_only other_churches_only church_plus_other }
+enum ProfileStatus { draft pending_vetting vetted_active denied hard_blocked }
+enum VettingDecision { approved denied hard_blocked }
+enum MatchRequestStatus { pending accepted rejected expired no_longer_available }
+enum MatchStatus { active ended reset_pending }
+enum ChatChannelType { private counselor_group }
+enum ResetStatus { pending_debrief completed denied }
+enum AppealStatus { open approved denied }
+enum SubscriptionTier { monthly yearly }
+enum SubscriptionStatus { active expired canceled }
+```
 
-datasource db {
-  provider = "postgresql"
-}
+### 3.2 Auth & Role Tables
 
-// ============= ENUMS =============
-
-enum Role {
-  SuperAdmin
-  ChurchAdmin
-  Counselor
-  User
-}
-
-enum ChurchModelType {
-  PARENT_BRANCH       // e.g., RCCG with custom parish/branch input
-  INDIVIDUAL_PARISH   // e.g., Catholic, Anglican, Baptist with designated local counselor
-}
-
-enum GenderType {
-  Male
-  Female
-}
-
-enum MatchPreferenceType {
-  my_church
-  my_church_plus
-  other_churches
-}
-
-enum SalaryRange {
-  RANGE_0_100K        // 0 - 100k
-  RANGE_100K_500K     // 100k - 500k
-  RANGE_500K_1M       // 500k - 1M
-  RANGE_1M_PLUS       // 1M+
-}
-
-enum SubscriptionTierType {
-  free
-  premium
-}
-
-enum SubscriptionPlanInterval {
-  MONTHLY
-  YEARLY
-}
-
-enum SubscriptionStatusType {
-  active
-  past_due
-  expired
-  canceled
-}
-
-enum StatusType {
-  pending
-  active
-  suspended
-  deleted
-}
-
-enum UserVettingStatus {
-  DRAFT               // Profile incomplete (< 100%)
-  PENDING_VETTING     // 100% complete, awaiting counselor call
-  VETTED_ACTIVE       // Counselor approved, active in discovery
-  REJECTED            // Counselor logged rejection reason
-  HARD_BLOCKED        // Non-serious / troll account; appeals process enabled
-  DEBRIEF_REQUIRED    // Exited a match, must complete counselor debrief before re-indexing
-}
-
-enum MatchStatus {
-  AWAITING_DECISIONS
-  WAITING_FOR_OTHER
-  MUTUAL_ACCEPTED
-  IN_CONVERSATION
-  COURTSHIP
-  MARRIED
-  ENDED
-  DECLINED
-  EXPIRED
-}
-
-enum MatchRequestStatus {
-  PENDING
-  ACCEPTED
-  DECLINED
-  CANCELLED
-  SUPERSEDED          // Auto-cancelled when either party accepts another request
-}
-
-enum ChannelType {
-  COUPLE_PRIVATE      // Direct encrypted chat between matched couple
-  COUNSELOR_GROUP     // 4-party channel (Couple + Counselor A + Counselor B)
-}
-
-enum EventStatus {
-  PROPOSED
-  CONFIRMED
-  CANCELLED
-  COMPLETED
-}
-
-// ============= CORE AUTH =============
-
+```prisma
 model Account {
-  id                      String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email                   String    @unique
-  password                String?   // Optional for OAuth users
-  authProvider            String    @default("local") // local, google, apple
-  authProviderId          String?
-  firstName               String
-  lastName                String
-  phone                   String?
-  role                    Role
-  status                  StatusType @default(pending)
+  id        String   @id @default(uuid())
+  email     String?  @unique
+  phone     String?  @unique
+  password  String?                     // nullable — social-auth-only accounts have none
+  firstName String
+  lastName  String
+  role      Role
+  status    AccountStatus @default(active)
 
-  // Verification & Security
-  isEmailVerified         Boolean   @default(false)
-  emailVerificationToken  String?   @unique
-  emailVerificationExpiry DateTime?
-  passwordResetToken      String?   @unique
-  passwordResetExpiry     DateTime?
+  socialProvider   String?              // 'google' | 'apple' | 'facebook'
+  socialProviderId String?
 
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @updatedAt
+  isEmailVerified          Boolean   @default(false)
+  emailVerificationToken   String?   @unique
+  emailVerificationExpiry  DateTime?
+  passwordResetToken       String?   @unique
+  passwordResetExpiry      DateTime?
 
-  // 1:1 Role Profiles
-  superAdmin              SuperAdmin?
-  churchAdmin             ChurchAdmin?
-  counselor               Counselor?
-  user                    User?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Relations
-  invitesCreated          Invite[]  @relation("CreatedBy")
-  messagesSent            Message[]
-  eventsProposed          CalendarEvent[] @relation("ProposedBy")
-
-  @@map("accounts")
+  superAdmin  SuperAdmin?
+  churchAdmin ChurchAdmin?
+  counselor   Counselor?
+  pastor      Pastor?
+  user        UserProfile?
 }
-
-// ============= ROLE PROFILES =============
 
 model SuperAdmin {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId String   @unique @db.Uuid
-  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  id        String  @id @default(uuid())
+  accountId String  @unique
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   churchesCreated Church[]
-
-  @@map("super_admins")
 }
 
 model ChurchAdmin {
-  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId String   @unique @db.Uuid
-  churchId  String   @unique @db.Uuid // STRICT 1:1 WITH CHURCH
-  title     String?  // Optional: Pastor, Reverend, Priest, Bishop, Elder
-
-  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  church    Church   @relation(fields: [churchId], references: [id], onDelete: Cascade)
-
-  @@map("church_admins")
+  id        String  @id @default(uuid())
+  accountId String  @unique
+  churchId  String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  church    Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
 }
 
 model Counselor {
-  id             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId      String    @unique @db.Uuid
-  churchId       String    @db.Uuid
-  bio            String?
+  id        String  @id @default(uuid())
+  accountId String  @unique
+  churchId  String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  church    Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
 
-  account        Account   @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  church         Church    @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  assignedUsers  User[]    @relation("AssignedCounselor")
-  createdMatches Match[]   @relation("CounselorMatches")
-  vettingLogs    VettingLog[]
-  debriefs       CounselorDebrief[]
-
-  @@index([churchId])
-  @@map("counselors")
+  assignedUsers UserProfile[]  @relation("CounselorAssignments")
+  vettingLogs   VettingLog[]
 }
 
-model User {
-  id                          String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  accountId                   String             @unique @db.Uuid
-  gender                      GenderType
-  dateOfBirth                 DateTime?
+model Pastor {
+  id        String  @id @default(uuid())
+  accountId String  @unique
+  churchId  String
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  church    Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
+  // No dating profile relation — structurally cannot appear in discovery.
+}
+```
 
-  // Progressive Onboarding & Profile Gate
-  onboardingStep              Int                @default(1)
-  profileCompletionPercentage Int                @default(0)
-  isDiscoveryIndexed          Boolean            @default(false)
-  vettingStatus               UserVettingStatus  @default(DRAFT)
-  whatsappNumber              String?
+### 3.3 Church
 
-  // Church Selection
-  churchId                    String?            @db.Uuid
-  church                      Church?            @relation("ChurchMembers", fields: [churchId], references: [id])
-  branchName                  String?            // For Parent-Branch models (e.g. RCCG Parish Name)
+```prisma
+model Church {
+  id             String @id @default(uuid())
+  name           String                       // for Independent: the specific parish name
+  onboardingType ChurchOnboardingType
+  isParentOrg    Boolean @default(false)       // true only for e.g. "RCCG" top-level record
 
-  // Financial & Professional Integrity (Privacy Firewall)
-  occupation                  String?
-  salaryRange                 SalaryRange?       // VISIBLE ONLY TO COUNSELOR
+  email   String? @unique
+  phone   String?
+  state   String
+  lga     String?
+  city    String?
+  address String?
+  latitude  Float?
+  longitude Float?
 
-  // Geographic & Physical Footprint
-  originCountry               String?
-  originState                 String?
-  originLga                   String?
-  residenceCountry            String?
-  residenceState              String?
-  residenceCity               String?
-  residenceAddress            String?
-  residenceLatitude           Float?
-  residenceLongitude          Float?
-  residencePlaceId            String?
-  residenceFormattedAddress   String?
+  // Senior Pastor details captured at onboarding time
+  pastorName  String?
+  pastorEmail String?
+  pastorPhone String?
 
-  // Dating & Preferences
-  interests                   Json?
-  matchPreference             MatchPreferenceType?
-  videoIntroUrl               String?
-  videoDurationSeconds        Int?
+  status    ChurchStatus @default(pending)
+  createdBy String
+  creator   SuperAdmin   @relation(fields: [createdBy], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  churchAdmins ChurchAdmin[]
+  counselors   Counselor[]
+  pastors      Pastor[]
+  members      UserProfile[]
+}
+```
+
+**Design resolution — Parent-Branch model:** the PRD states the parent org (e.g. RCCG) is onboarded *once*. This means there is exactly one `Church` row for RCCG. Individual users select RCCG from a dropdown and free-type their branch/parish name into `UserProfile.branchName` (below) — there is no separate `Church` row per RCCG branch. Consequently, ChurchAdmins/Counselors attached to the RCCG `Church` row serve *all* RCCG members platform-wide, regardless of branch. For `Independent` churches (Catholic, Anglican, Baptist), each parish is onboarded as its own `Church` row with its own dedicated ChurchAdmin/Counselor pool, giving exact local mapping. This is the mechanism the PRD is describing when contrasting "standardized" vs "individual" onboarding.
+
+### 3.4 User Profile (the dating profile)
+
+```prisma
+model UserProfile {
+  id        String  @id @default(uuid())
+  accountId String  @unique
+  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  gender      Gender
+  dateOfBirth DateTime
+
+  // Church mapping
+  churchId   String?
+  church     Church? @relation(fields: [churchId], references: [id])
+  branchName String?           // free text — only used/required when church.onboardingType = ParentBranch
+
+  // Address (Map API integrated)
+  addressState   String?
+  addressLga     String?
+  addressCity    String?
+  addressLine    String?
+  latitude       Float?
+  longitude      Float?
+
+  // Dual-phone
+  voicePhone    String?
+  whatsappPhone String?
+
+  // Social identity (2-of-3 gate enforced in service layer)
+  linkedinHandle  String?
+  instagramHandle String?
+  facebookHandle  String?
+
+  // Financial & professional (Privacy Firewall — hidden from matches, visible only to assigned counselor)
+  occupation  String?
+  incomeRange IncomeRange?
+
+  // Media
+  photoUrls    Json?            // exactly 3 URLs, validated at completion-check time
+  introVideoUrl String?         // liveness video, <1 min
+
+  // Matching preferences
+  matchScope MatchScope?
+
+  // Profile completion / gating
+  isProfileComplete Boolean @default(false)   // computed & cached whenever a section is updated
+
+  // Vetting state machine
+  status              ProfileStatus @default(draft)
+  deniedReason        String?
+  hardBlockedReason   String?
+  assignedCounselorId String?
+  assignedCounselor   Counselor? @relation("CounselorAssignments", fields: [assignedCounselorId], references: [id])
+  vettedAt            DateTime?
+  vettedBy            String?    // counselorId
 
   // Subscription
-  subscriptionTier            SubscriptionTierType     @default(free)
-  subscriptionInterval        SubscriptionPlanInterval?
-  subscriptionStatus          SubscriptionStatusType   @default(active)
-  subscriptionExpiresAt       DateTime?
+  subscription Subscription?
 
-  // Counselor Assignment
-  assignedCounselorId         String?            @db.Uuid
-  assignedCounselor           Counselor?         @relation("AssignedCounselor", fields: [assignedCounselorId], references: [id])
-  verifiedAt                  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  // Relations
-  account                     Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  photos                      UserPhoto[]
-  socialMediaHandles          UserSocialMedia[]
-  sentRequests                MatchRequest[]     @relation("SentRequests")
-  receivedRequests            MatchRequest[]     @relation("ReceivedRequests")
-  matchParticipations         MatchParticipant[]
-  vettingLogs                 VettingLog[]
-  appealRequests              AppealRequest[]
-  debriefs                    CounselorDebrief[]
-
-  @@index([churchId])
-  @@index([vettingStatus])
-  @@index([isDiscoveryIndexed])
-  @@map("users")
+  sentRequests     MatchRequest[] @relation("SentRequests")
+  receivedRequests MatchRequest[] @relation("ReceivedRequests")
+  vettingLogs      VettingLog[]
+  appeals          AppealCase[]
 }
+```
 
-model UserPhoto {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String   @db.Uuid
-  url         String
-  order       Int      // 1, 2, or 3 (Exactly 3 photos required)
-  publicId    String?
+**Profile completion gate — required fields for `isProfileComplete = true`:**
+`gender, dateOfBirth, churchId, (branchName if ParentBranch church), addressState, addressLine, voicePhone, whatsappPhone, incomeRange, matchScope, photoUrls (exactly 3), introVideoUrl`, **and** at least 2 of `{linkedinHandle, instagramHandle, facebookHandle}` non-null.
+
+### 3.5 Vetting
+
+```prisma
+model VettingLog {
+  id          String @id @default(uuid())
+  userId      String
+  counselorId String
+  decision    VettingDecision
+  reason      String?
   createdAt   DateTime @default(now())
 
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, order])
-  @@map("user_photos")
+  user      UserProfile @relation(fields: [userId], references: [id])
+  counselor Counselor   @relation(fields: [counselorId], references: [id])
 }
 
-// ============= CHURCH MODEL =============
+model AppealCase {
+  id         String @id @default(uuid())
+  userId     String
+  reason     String
+  status     AppealStatus @default(open)
+  reviewedBy String?              // SuperAdmin accountId
+  resolution String?
+  createdAt  DateTime @default(now())
+  resolvedAt DateTime?
 
-model Church {
-  id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  officialName String
-  aka          String?
-  churchModel  ChurchModelType @default(INDIVIDUAL_PARISH)
-  email        String          @unique
-  phone        String
-
-  // Address & Geocoding
-  state        String
-  lga          String?
-  city         String?
-  address      String?
-
-  status       StatusType      @default(pending)
-  createdBy    String          @db.Uuid
-  creator      SuperAdmin      @relation(fields: [createdBy], references: [id])
-
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
-
-  // 1:1 ChurchAdmin, 1:N Counselors & Members
-  churchAdmin  ChurchAdmin?    // STRICT 1:1
-  counselors   Counselor[]
-  members      User[]          @relation("ChurchMembers")
-  invites      Invite[]
-
-  @@map("churches")
+  user UserProfile @relation(fields: [userId], references: [id])
 }
+```
 
-// ============= MATCHMAKING & REQUEST ENGINE =============
+### 3.6 Discovery, Requests & Matching
 
+```prisma
 model MatchRequest {
-  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  senderId     String             @db.Uuid
-  receiverId   String             @db.Uuid
-  status       MatchRequestStatus @default(PENDING)
-  declinedAt   DateTime?
-  supersededAt DateTime?
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  id          String @id @default(uuid())
+  requesterId String
+  recipientId String
+  status      MatchRequestStatus @default(pending)
+  createdAt   DateTime @default(now())
+  resolvedAt  DateTime?
 
-  sender       User               @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
-  receiver     User               @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  requester UserProfile @relation("SentRequests", fields: [requesterId], references: [id])
+  recipient UserProfile @relation("ReceivedRequests", fields: [recipientId], references: [id])
 
-  @@index([senderId, status])
-  @@index([receiverId, status])
-  @@map("match_requests")
+  match Match?
 }
 
 model Match {
-  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  status             MatchStatus        @default(IN_CONVERSATION)
-  counselorId        String?            @db.Uuid
-  createdAt          DateTime           @default(now())
-  endedAt            DateTime?
-  compatibilityScore Int?
+  id             String @id @default(uuid())
+  matchRequestId String @unique
+  userAId        String
+  userBId        String
+  status         MatchStatus @default(active)
 
-  counselor          Counselor?         @relation("CounselorMatches", fields: [counselorId], references: [id], onDelete: SetNull)
-  participants       MatchParticipant[]
-  conversations      Conversation[]
-  calendarEvents     CalendarEvent[]
-  debriefs           CounselorDebrief[]
+  privateChatId String? @unique
+  groupChatId   String? @unique
 
-  @@index([status])
-  @@index([counselorId])
-  @@map("matches")
+  endedAt    DateTime?
+  endedBy    String?
+  endedReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  matchRequest        MatchRequest @relation(fields: [matchRequestId], references: [id])
+  statusResetRequests StatusResetRequest[]
+}
+```
+
+**Business rules encoded here, not in the schema:**
+- **3-slot limit:** a user may have at most 3 `MatchRequest` rows with `status = pending` where they are `requester`. Enforced in the create-request service, not a DB constraint.
+- **Blind rejection:** when a recipient rejects, `MatchRequest.status → rejected`. The requester-facing API **never** returns the recipient's identity for a rejected request — only a slot-count delta.
+- **First-come acceptance / concurrency resolution:** when any one of a user's sent requests is accepted, all *other* pending requests **sent by that same user** are transitioned to `no_longer_available` in the same transaction, and a `Match` row is created for the accepted one.
+
+### 3.7 Communication
+
+```prisma
+model ChatChannel {
+  id        String @id @default(uuid())
+  matchId   String
+  type      ChatChannelType
+  createdAt DateTime @default(now())
+
+  participants ChatParticipant[]
+  messages     ChatMessage[]
+  events       CalendarEvent[]
 }
 
-model MatchParticipant {
-  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  matchId    String   @db.Uuid
-  userId     String   @db.Uuid
-  feedback   String?
-  notes      String?
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+model ChatParticipant {
+  id            String @id @default(uuid())
+  chatChannelId String
+  accountId     String
+  role          Role
 
-  match      Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([matchId, userId])
-  @@index([userId])
-  @@map("match_participants")
+  chatChannel ChatChannel @relation(fields: [chatChannelId], references: [id])
 }
 
-// ============= COMMUNICATIONS & CALENDAR =============
+model ChatMessage {
+  id            String @id @default(uuid())
+  chatChannelId String
+  senderId      String     // accountId
+  content       String?
+  attachmentUrl String?
+  sentAt        DateTime @default(now())
 
-model Conversation {
-  id           String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  matchId      String                    @db.Uuid
-  type         ChannelType
-  createdAt    DateTime                  @default(now())
-  updatedAt    DateTime                  @updatedAt
-
-  match        Match                     @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  participants ConversationParticipant[]
-  messages     Message[]
-
-  @@index([matchId])
-  @@map("conversations")
-}
-
-model ConversationParticipant {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  conversationId String       @db.Uuid
-  accountId      String       @db.Uuid
-  roleInChat     String       // COUPLE_MEMBER, COUNSELOR, OBSERVER
-  joinedAt       DateTime     @default(now())
-
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  @@unique([conversationId, accountId])
-  @@map("conversation_participants")
-}
-
-model Message {
-  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  conversationId String       @db.Uuid
-  senderId       String       @db.Uuid
-  content        String
-  mediaUrl       String?
-  readAt         DateTime?
-  createdAt      DateTime     @default(now())
-
-  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender         Account      @relation(fields: [senderId], references: [id], onDelete: Cascade)
-
-  @@index([conversationId, createdAt])
-  @@map("messages")
+  chatChannel ChatChannel @relation(fields: [chatChannelId], references: [id])
 }
 
 model CalendarEvent {
-  id             String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  matchId        String      @db.Uuid
-  proposedById   String      @db.Uuid
+  id             String @id @default(uuid())
+  chatChannelId  String
+  proposedBy     String            // accountId
   title          String
-  description    String?
-  startTime      DateTime
-  endTime        DateTime
-  status         EventStatus @default(PROPOSED)
-  meetingLink    String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  scheduledAt    DateTime
+  status         String            // proposed | confirmed | canceled
+  participantIds Json              // auto-populated with both accountIds on confirm
+  createdAt      DateTime @default(now())
 
-  match          Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  proposedBy     Account     @relation("ProposedBy", fields: [proposedById], references: [id], onDelete: Cascade)
+  chatChannel ChatChannel @relation(fields: [chatChannelId], references: [id])
+}
+```
 
-  @@index([matchId])
-  @@map("calendar_events")
+Every `Match` creates exactly 2 `ChatChannel`s: one `private` (the couple only) and one `counselor_group` (the couple + both assigned counselors), per §6.
+
+### 3.8 Post-Match Governance
+
+```prisma
+model StatusResetRequest {
+  id           String @id @default(uuid())
+  userId       String
+  counselorId  String
+  matchId      String
+  status       ResetStatus @default(pending_debrief)
+  debriefNotes String?
+  createdAt    DateTime @default(now())
+  resolvedAt   DateTime?
+
+  match Match @relation(fields: [matchId], references: [id])
+}
+```
+
+A user whose match `ended` cannot re-enter discovery until their `StatusResetRequest` reaches `completed`.
+
+### 3.9 Subscription & Notifications
+
+```prisma
+model Subscription {
+  id        String @id @default(uuid())
+  userId    String @unique
+  tier      SubscriptionTier
+  status    SubscriptionStatus @default(active)
+  startedAt DateTime @default(now())
+  expiresAt DateTime
+  autoRenew Boolean @default(true)
+
+  user UserProfile @relation(fields: [userId], references: [id])
 }
 
-// ============= VETTING, APPEALS & DEBRIEF =============
-
-model VettingLog {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String   @db.Uuid
-  counselorId String   @db.Uuid
-  action      String   // APPROVED, REJECTED, HARD_BLOCKED
-  reason      String?
-  notes       String?
-  createdAt   DateTime @default(now())
-
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  counselor   Counselor @relation(fields: [counselorId], references: [id], onDelete: Cascade)
-
-  @@map("vetting_logs")
-}
-
-model AppealRequest {
-  id                     String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId                 String   @db.Uuid
-  appealReason           String
-  status                 String   @default("PENDING") // PENDING, APPROVED, REJECTED
-  reviewedBySuperAdminId String?  @db.Uuid
-  createdAt              DateTime @default(now())
-  updatedAt              DateTime @updatedAt
-
-  user                   User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("appeal_requests")
-}
-
-model CounselorDebrief {
-  id                   String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  matchId              String    @db.Uuid
-  userId               String    @db.Uuid
-  counselorId          String    @db.Uuid
-  notes                String
-  readinessScore       Int?      // 1 - 10
-  clearedForDiscoveryAt DateTime?
-  createdAt            DateTime  @default(now())
-
-  match                Match     @relation(fields: [matchId], references: [id], onDelete: Cascade)
-  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  counselor            Counselor @relation(fields: [counselorId], references: [id], onDelete: Cascade)
-
-  @@map("counselor_debriefs")
-}
-
-model UserSocialMedia {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId      String   @db.Uuid
-  platform    String   // LinkedIn, Instagram, Facebook
-  handleOrUrl String
-  createdAt   DateTime @default(now())
-
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("user_social_media")
-}
-
-model Invite {
-  id                 String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  token              String     @unique
-  type               String     // ChurchAdmin, Counselor
-  email              String
-  churchId           String?    @db.Uuid
-  createdByAccountId String     @db.Uuid
-  used               Boolean    @default(false)
-  usedAt             DateTime?
-  expiresAt          DateTime
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
-
-  church             Church?    @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  createdBy          Account    @relation("CreatedBy", fields: [createdByAccountId], references: [id])
-
-  @@map("invites")
+model Notification {
+  id        String  @id @default(uuid())
+  accountId String
+  type      String            // see Notification Matrix, §9
+  title     String
+  body      String
+  isRead    Boolean @default(false)
+  metadata  Json?
+  createdAt DateTime @default(now())
 }
 ```
 
 ---
 
-## 4. Key Architectural Subsystems & Workflows
+## 4. Church Onboarding Logic
 
-### 1. 1-to-1 Church-Admin & Pastoral Title Governance
-- Each Church record is strictly linked to a single `ChurchAdmin`.
-- When creating/updating a ChurchAdmin:
-  - Input payload includes `title` (e.g. "Pastor", "Reverend", "Priest", "Bishop").
-  - The Church Admin can view the church congregation directory and aggregated analytics.
-  - The Church Admin account is barred from appearing in matchmaking feeds (`Role != 'User'`).
+| Step | Actor | Detail |
+|---|---|---|
+| 1 | SuperAdmin | Creates `Church` — picks `onboardingType`. If `ParentBranch`, sets `isParentOrg = true` (one-time, e.g. "RCCG"). If `Independent`, one row per physical parish. |
+| 2 | SuperAdmin | Captures Senior Pastor details on the same form (`pastorName/Email/Phone`). |
+| 3 | SuperAdmin | Creates the first `ChurchAdmin` account for that church directly (sets credentials). |
+| 4 | ChurchAdmin | Logs in, creates `Counselor` account(s) directly. |
+| 5 | ChurchAdmin or SuperAdmin | Creates the `Pastor` account, linked to the captured pastor details, with Counselor-equivalent dashboard permissions. |
 
-### 2. Progressive Onboarding & 100% Profile Gate
-- **Step-1 Capture**: `/api/auth/lead-register` immediately captures contact info (`email`, `phone`, `firstName`, `lastName`).
-- **Profile Completeness Engine**:
-  - Calculates score across: Demographics (DOB, Gender), Origin & Residence (Geocoded), Exact 3 Photos, Video Intro (<1 min), Standardized Salary Band, Match Preference, 2-of-3 Social Handles (LinkedIn, Instagram, Facebook).
-- **Gate Middleware (`requireProfileComplete`)**:
-  - Automatically intercepts calls to `/discovery`, `/requests`, and `/matches`.
-  - Rejects incomplete users with a structured list of remaining required items.
-  - When completion hits 100%, user status updates to `PENDING_VETTING`.
+---
 
-### 3. Match Discovery & "Shame-Free" 3-Slot Request Logic
-- **Discovery Engine (`GET /api/discovery/feed`)**:
-  - Filter: Opposite gender, `VETTED_ACTIVE`, `isDiscoveryIndexed = true`.
-  - Geographic Weighting: Haversine distance calculated against candidate coordinates.
-  - Church scope filter applied according to `MatchPreferenceType`.
-- **Request Engine (`POST /api/requests/send`)**:
-  - Checks if user has `< 3` active pending requests. If `= 3`, throws `400 Bad Request`.
-- **Blind Rejection (`POST /api/requests/:id/decline`)**:
-  - Receiver declines request.
-  - Sender receives generic notification *"You have 1 request slot available"* (target identity is redacted).
-- **First-Come Acceptance Resolution (`POST /api/requests/:id/accept`)**:
-  - Atomic Prisma `$transaction`:
-    1. Creates `Match` (`status: IN_CONVERSATION`).
-    2. Initializes `COUPLE_PRIVATE` and `COUNSELOR_GROUP` conversation channels.
-    3. Auto-cancels (`status: SUPERSEDED`) all other pending requests sent or received by both parties.
-    4. Sets both users' `isDiscoveryIndexed = false`.
+## 5. Onboarding & Profile Completion Gate (User/Mobile)
 
-### 5. Counselor-Mediated Status Reset
-- When a relationship terminates (`POST /api/matches/:id/end`):
-  - Both users enter `DEBRIEF_REQUIRED` status and remain unindexed.
-  - The assigned counselor reviews the case via `POST /api/counselor/users/:userId/debrief-reset`.
-  - Upon debrief completion, counselor resets status to `VETTED_ACTIVE` and restores discovery indexing.
+**Lead capture (low friction):**
+1. Social auth (one-tap) *or* minimal email/phone + password signup.
+2. On this first step alone, `Account` is created and an abandonment-recovery email/SMS drip is scheduled (background job, triggers if `UserProfile.isProfileComplete` remains `false` after N hours).
 
-### 6. Data Privacy Firewall & Restricted Analytics
-- **Church Admin (Auditor)**:
-  - Allowed: Member names, photos, join date, verification status, aggregate match counts.
-  - Redacted: Salary range, exact residential address, match preference, and identity of external match partners.
-- **Counselor**:
-  - Full "Whole Data" access (Salary, Address, History) strictly limited to their assigned users.
+**Progressive enrichment (each step is a separate, resumable API call):**
+Basic info → Church selection → Address → Phones → Social handles → Income → Photos (3) → Intro video → Match preferences → Review.
+
+**The Gate:** `Search`, `Discovery`, and `MatchRequest` endpoints all check `UserProfile.isProfileComplete === true` **and** `status === vetted_active` before allowing access. Incomplete or unvetted users get a `403` with a specific `data.reason` code (`profile_incomplete` | `pending_vetting` | `denied` | `hard_blocked`) so the mobile app can route to the correct waiting/lock screen.
+
+---
+
+## 6. Vetting State Machine
+
+```
+draft ──(100% complete)──▶ pending_vetting ──(counselor approves)──▶ vetted_active ──▶ [discovery pool]
+                                   │
+                                   ├──(counselor denies + reason)──▶ denied ──(user edits & resubmits)──▶ pending_vetting
+                                   │
+                                   └──(counselor hard-blocks + reason)──▶ hard_blocked ──(user appeals)──▶ AppealCase(open)
+                                                                                              │
+                                                                                   SuperAdmin resolves:
+                                                                              approved → back to pending_vetting
+                                                                              denied   → stays hard_blocked
+```
+
+Only a `Counselor` (or `Pastor`, as auditor) assigned to the user can action `pending_vetting`. Only a `SuperAdmin` can resolve an `AppealCase`.
+
+---
+
+## 7. Discovery & Matching Engine
+
+- **Eligibility:** only `status = vetted_active` profiles of the **opposite gender** are returned, filtered by `matchScope` (church_only / other_churches_only / church_plus_other) with geographic weighting applied (closer `latitude/longitude` ranks higher, regardless of scope).
+- **Slot limit:** a requester may have at most **3** simultaneously `pending` sent requests. The send-request endpoint rejects a 4th with a specific error until one resolves.
+- **Blind rejection:** rejection responses to the requester never include recipient identity — only `{ "slotsAvailable": 1 }`.
+- **Concurrency resolution:** accepting one request auto-transitions all of that requester's other `pending` sent requests to `no_longer_available` and creates the `Match` + both chat channels in one transaction.
+
+---
+
+## 8. Post-Match Governance
+
+On `Match` creation:
+1. Notify both users and **both their assigned counselors** (see Notification Matrix, §9).
+2. Create `ChatChannel(type=private)` for the couple.
+3. Create `ChatChannel(type=counselor_group)` with participants = both users + both counselors.
+4. Either party may propose a `CalendarEvent` inside either chat; on `status → confirmed`, both accountIds are auto-added to `participantIds` ("Auto-Add" logic).
+5. If the match ends, the ending user must submit a `StatusResetRequest`; only after their counselor marks it `completed` does `UserProfile.status` return to `vetted_active` and re-enter discovery.
+
+---
+
+## 9. Notification Matrix
+
+| Event | Notified | Type |
+|---|---|---|
+| Signup abandoned (profile incomplete after threshold) | User (email/SMS) | `lead_recovery` |
+| Vetting approved | User | `vetting_approved` |
+| Vetting denied | User | `vetting_denied` |
+| Hard-blocked | User | `hard_blocked` |
+| Appeal resolved | User | `appeal_resolved` |
+| Request received | Recipient | `request_received` |
+| Request accepted (match formed) | Both users, both counselors | `match_formed` |
+| Request rejected | Requester (blind — no identity) | `request_rejected_blind` |
+| Other requests auto-closed (concurrency) | Requester | `requests_no_longer_available` |
+| Calendar event proposed | Other chat participant(s) | `event_proposed` |
+| Calendar event confirmed | All participants | `event_confirmed` |
+| Match ended | Both users, both counselors | `match_ended` |
+| Status reset completed | User | `reset_completed` |
+| Subscription expiring soon | User | `subscription_expiring` |
+
+---
+
+## 10. Mobile App — Screen Inventory
+
+### A. Auth & Lead Capture
+1. Splash 2. Welcome/Value-Prop Carousel 3. Social Auth Signup 4. Minimal Email/Phone Signup 5. Login 6. Forgot Password 7. Reset Password 8. Email Verification Prompt
+
+### B. Profile Enrichment (resumable, gated)
+9. Onboarding Hub (shows completion %, resumes where left off) 10. Basic Info 11. Church Selection — Parent+Branch variant 11b. Church Selection — Parish Search variant 12. Address + Map Confirmation 13. Phone Numbers (voice + WhatsApp) 14. Social Handles (2-of-3 gate UI) 15. Income Range 16. Photo Upload (exactly 3) 17. Intro Video Recording (liveness, <1 min, timer UI) 18. Match Preferences (scope selector) 19. Review & Submit
+
+### C. Gated / Waiting States
+20. Read-Only Lock Screen 21. Pending Vetting Waiting Screen 22. Denied Screen (reason + edit CTA) 23. Hard-Blocked Screen 24. Appeal Submission Form 25. Appeal Status Screen
+
+### D. Discovery & Requests
+26. Discovery Feed 27. Profile Detail View 28. Send-Request Confirmation (slot count shown) 29. Sent Requests List 30. Received Requests List (accept/reject) 31. Slots-Full Blocking Screen
+
+### E. Match & Communication
+32. Match Celebration 33. Private Chat 34. Counselor Group Chat 35. Propose Meeting (calendar-in-chat) 36. Meeting Confirmation 37. Relationship Status / Mark Ended 38. Status Reset Request Flow
+
+### F. Subscription
+39. Plans (Monthly/Yearly) 40. Checkout 41. Manage Subscription 42. Billing History
+
+### G. Profile & Settings
+43. My Profile 44. Edit Profile (deep-links into B steps) 45. Notification Settings 46. "Who Can See My Data" (informational privacy screen) 47. Account Settings (password, logout, delete)
+
+---
+
+## 11. Admin Web App — Screen Inventory
+
+### A. Auth
+1. Login (shared, role read from response) 2. Forgot/Reset Password
+
+### B. SuperAdmin
+3. Platform Dashboard 4. Church List 5. Create Church (onboarding-type selector + Pastor capture) 6. Church Detail/Edit 7. Create ChurchAdmin 8. Appeals Queue 9. Appeal Detail & Resolution 10. Subscription/Revenue Analytics
+
+### C. Unified Church Dashboard (shared shell — content gated by role per §2 permission matrix)
+11. Dashboard Home 12. Member Directory 13. Member Profile Detail (fields shown vary by role) 14. Assign Counselor (ChurchAdmin) 15. Counselor Management (ChurchAdmin) 16. Pastor Assignment (ChurchAdmin/SuperAdmin) 17. Vetting Queue (Counselor/Pastor) 18. Vetting Review & Decision (Counselor/Pastor) 19. Active Matches Oversight (Counselor) 20. Counselor Group Chat (Counselor side) 21. Status Reset Debrief Queue (Counselor) 22. Church Profile Settings
+
+---
+
+## 12. API Reference
+
+All endpoints require `Authorization: Bearer {token}` unless marked **Public**. All list endpoints support `?page=&limit=`.
+
+### 12.1 Auth
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| POST | `/auth/social` | Public | Social provider token exchange → creates/logs in Account |
+| POST | `/auth/signup` | Public | Minimal fields: email/phone, password |
+| POST | `/auth/login` | Public | Shared across all roles |
+| POST | `/auth/forgot-password` | Public | |
+| POST | `/auth/reset-password` | Public | |
+| GET | `/auth/verify-email/:token` | Public | |
+| POST | `/auth/request-verification` | Public | |
+| GET | `/auth/me` | Any | |
+
+### 12.2 Churches (SuperAdmin)
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| POST | `/churches` | SuperAdmin | See §12.6 for body |
+| GET | `/churches` | SuperAdmin | `?onboardingType=&status=` |
+| GET | `/churches/parent-orgs` | Public | Dropdown source for ParentBranch signup step |
+| GET | `/churches/search?q=` | Public | Parish search for Independent signup step |
+| GET | `/churches/:id` | SuperAdmin, own ChurchAdmin/Counselor/Pastor | |
+| PUT | `/churches/:id` | SuperAdmin | |
+| POST | `/churches/:id/church-admins` | SuperAdmin | Direct creation, see §12.6 |
+| POST | `/churches/:id/counselors` | ChurchAdmin, SuperAdmin | Direct creation |
+| POST | `/churches/:id/pastors` | ChurchAdmin, SuperAdmin | Direct creation |
+
+### 12.3 User Profile (Onboarding steps — each PUT is one resumable step)
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| GET | `/profile/me` | User | Returns full profile + `completionStatus` breakdown |
+| PUT | `/profile/basic-info` | User | gender, dateOfBirth |
+| PUT | `/profile/church` | User | churchId (+ branchName if ParentBranch) |
+| PUT | `/profile/address` | User | address fields + lat/lng |
+| PUT | `/profile/phones` | User | voicePhone, whatsappPhone |
+| PUT | `/profile/social-handles` | User | 2-of-3 validated server-side |
+| PUT | `/profile/income` | User | incomeRange |
+| POST | `/profile/photos` | User | multipart, exactly 3 total enforced |
+| POST | `/profile/intro-video` | User | multipart, <1 min enforced |
+| PUT | `/profile/match-preferences` | User | matchScope |
+| POST | `/profile/submit` | User | Locks in — flips `pending_vetting` if 100% complete |
+
+### 12.4 Vetting
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| GET | `/vetting/queue` | Counselor, Pastor | Assigned users with `status=pending_vetting` |
+| GET | `/vetting/:userId` | Counselor, Pastor | Full profile incl. hidden fields |
+| POST | `/vetting/:userId/decide` | Counselor, Pastor | See §12.6 |
+| POST | `/appeals` | User | Submit appeal while `hard_blocked` |
+| GET | `/appeals` | SuperAdmin | Queue |
+| POST | `/appeals/:id/resolve` | SuperAdmin | approve/deny |
+
+### 12.5 Discovery, Requests, Matches
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| GET | `/discovery/feed` | User (gated) | Opposite gender, `vetted_active`, scope + geo-weighted |
+| GET | `/discovery/:userId` | User (gated) | Profile detail (no hidden fields) |
+| POST | `/match-requests` | User (gated) | See §12.6 — enforces 3-slot limit |
+| GET | `/match-requests/sent` | User | |
+| GET | `/match-requests/received` | User | |
+| POST | `/match-requests/:id/accept` | User | Triggers Match + concurrency resolution |
+| POST | `/match-requests/:id/reject` | User | Blind — response to requester has no identity |
+| GET | `/matches/:id` | User (participant), Counselor (assigned) | |
+| POST | `/matches/:id/end` | User (participant) | |
+| POST | `/matches/:id/reset-request` | User (participant) | Creates `StatusResetRequest` |
+| POST | `/reset-requests/:id/complete` | Counselor | Debrief done → user re-enters pool |
+
+### 12.6 Chat & Calendar
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| GET | `/chats/:matchId` | Participants (user/counselor per channel type) | Returns both channel IDs |
+| GET | `/chats/channel/:channelId/messages` | Channel participants | |
+| POST | `/chats/channel/:channelId/messages` | Channel participants | |
+| POST | `/chats/channel/:channelId/events` | Channel participants | Propose meeting |
+| POST | `/events/:id/confirm` | Other participant | Auto-Add logic fires |
+| POST | `/events/:id/cancel` | Either participant | |
+
+### 12.7 Subscriptions
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| GET | `/subscriptions/plans` | Public | |
+| POST | `/subscriptions/checkout` | User | |
+| GET | `/subscriptions/me` | User | |
+| POST | `/subscriptions/cancel` | User | |
+| GET | `/subscriptions/billing-history` | User | |
+
+### 12.8 Church Admin / Counselor / Pastor Dashboard
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| GET | `/church-admin/dashboard` | ChurchAdmin | |
+| GET | `/church-admin/members` | ChurchAdmin | Basic-directory fields only per privacy tier |
+| POST | `/church-admin/assign-counselor` | ChurchAdmin | body: `{userId, counselorId}` |
+| GET | `/counselor/dashboard` | Counselor, Pastor | |
+| GET | `/counselor/assigned-users` | Counselor | Pastor uses `/counselor/all-users` (auditor, church-wide) |
+| GET | `/counselor/active-matches` | Counselor | |
+| GET | `/admin/dashboard` | SuperAdmin | Platform-wide stats |
+
+---
+
+## 13. Detailed Request/Response Contracts
+
+**These are the payloads worth spelling out in full because they carry non-obvious business logic. All other endpoints follow standard CRUD shapes using the same field names as the schema in §3, wrapped in the standard envelope.**
+
+### Create Church
+`POST /churches`
+```json
+{
+  "name": "RCCG",
+  "onboardingType": "ParentBranch",
+  "isParentOrg": true,
+  "state": "Lagos",
+  "pastorName": "Pastor Enoch A.",
+  "pastorEmail": "pastor@rccg.org",
+  "pastorPhone": "+2348012345678"
+}
+```
+Response `data`: `{ "church": { "id": "...", "status": "pending", ... } }`
+
+### Submit Match Preferences → Church Step (ParentBranch example)
+`PUT /profile/church`
+```json
+{ "churchId": "rccg-uuid", "branchName": "City of David Parish, Lekki" }
+```
+
+### Send Match Request
+`POST /match-requests`
+```json
+{ "recipientId": "user-uuid" }
+```
+Success:
+```json
+{
+  "success": true,
+  "message": "Request sent",
+  "data": { "requestId": "...", "slotsRemaining": 2 }
+}
+```
+Slot-limit error:
+```json
+{
+  "success": false,
+  "message": "You have used all 3 request slots. Free a slot before sending another.",
+  "data": null,
+  "errors": { "code": "slot_limit_reached" }
+}
+```
+
+### Reject Match Request (blind, from recipient side)
+`POST /match-requests/:id/reject`
+```json
+{ "reason": "optional, internal only — never shown to requester" }
+```
+What the **requester** sees on their next fetch of `/match-requests/sent`:
+```json
+{
+  "id": "...",
+  "status": "rejected",
+  "recipient": null,
+  "message": "You have 1 slot available."
+}
+```
+Note: `recipient` is deliberately nulled out for `rejected` requests in the requester-facing serializer — this is the Blind Rejection System.
+
+### Accept Match Request (concurrency resolution)
+`POST /match-requests/:id/accept`
+
+Server transaction:
+1. `MatchRequest.status → accepted`
+2. All **other** `pending` requests where `requesterId = this request's requesterId` → `no_longer_available`
+3. Create `Match`, `ChatChannel(private)`, `ChatChannel(counselor_group)`
+4. Fire `match_formed` notifications to both users + both counselors
+
+Response:
+```json
+{
+  "success": true,
+  "message": "Match created",
+  "data": {
+    "matchId": "...",
+    "privateChatId": "...",
+    "groupChatId": "..."
+  }
+}
+```
+
+### Vetting Decision
+`POST /vetting/:userId/decide`
+```json
+{ "decision": "denied", "reason": "Incomplete work history — please clarify current employer." }
+```
+```json
+{ "decision": "approved" }
+```
+```json
+{ "decision": "hard_blocked", "reason": "Profile appears non-serious / joke submission." }
+```
+Effect: updates `UserProfile.status`, writes a `VettingLog` row, fires the matching notification from §9.
+
+### Confirm Calendar Event (Auto-Add)
+`POST /events/:id/confirm`
+Response:
+```json
+{
+  "success": true,
+  "message": "Meeting confirmed and added to both calendars",
+  "data": { "eventId": "...", "participantIds": ["accId1", "accId2"], "status": "confirmed" }
+}
+```
+
+---
+
+## 14. Non-Functional Requirements & Tech Stack
+
+| Layer | Choice |
+|---|---|
+| Backend | TypeScript, Express, Prisma, PostgreSQL |
+| Auth | JWT + bcrypt; social auth via OAuth provider SDKs |
+| Media storage | Object storage (S3-compatible) for photos/video, signed URLs |
+| Maps | Google Maps / Mapbox Places API for address autocomplete + geocoding |
+| Realtime | WebSocket layer (e.g. Socket.IO) for chat + notifications |
+| Payments | Paystack/Stripe for NGN subscriptions |
+| Mobile | React Native (Expo), Expo Router, Zustand, React Hook Form + Zod |
+| Admin Web | React (TypeScript), same response envelope |
+| Background jobs | Queue (e.g. BullMQ) for lead-recovery drip emails/SMS, subscription-expiry checks |
+
+---
+
+## 15. Suggested Build Sequencing
+
+1. **Foundation:** Auth, Church CRUD (both onboarding types), ChurchAdmin/Counselor/Pastor direct creation
+2. **Profile enrichment:** All onboarding step endpoints + completion-gate logic + mobile onboarding screens
+3. **Vetting:** Queue, decision endpoint, state machine, denied/hard-blocked/appeal flows
+4. **Discovery & Matching:** Feed, slot-limited requests, blind rejection, concurrency resolution
+5. **Post-match:** Chat channels, calendar/Auto-Add, status reset flow
+6. **Subscriptions & Analytics:** Payment integration, SuperAdmin revenue dashboard, privacy-tiered church analytics
+7. **Notification matrix + background jobs** (lead recovery, subscription expiry) — can be layered in throughout, but functionally depends on steps above existing first
+
+---
+
+## 16. Open Design Decisions (flagged, not resolved by the source PRD)
+
+- **ParentBranch counselor assignment:** since branch is free text, all counselors for a ParentBranch org (e.g. RCCG) form one shared pool. If this needs to scale (RCCG has thousands of parishes), a future phase should consider formalizing branches as child `Church` records with `parentChurchId` — the schema in §3.3 deliberately avoids this for MVP per the PRD's "onboarded once" instruction, but the migration path exists if needed.
+- **Pastor's own marital status:** the PRD doesn't address whether a Pastor account can *also* independently hold a `UserProfile` (e.g. an unmarried pastor). Current design: Pastor role has no profile relation at all — if this is wrong, it needs explicit product sign-off since it changes the schema.
+- **Subscription enforcement point:** the source PRD mandates subscription for "uninterrupted access" during vetting/matching but doesn't specify exactly which endpoints are paywalled pre-vetting vs post-vetting. Recommend: subscription required starting at `pending_vetting → vetted_active` transition (i.e., you can build your profile for free, but need an active subscription to enter discovery) — confirm before building payment gating.

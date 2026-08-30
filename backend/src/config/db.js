@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.prisma = void 0;
+require("dotenv/config");
+var adapter_pg_1 = require("@prisma/adapter-pg");
+var client_1 = require("@prisma/client");
+var env_1 = require("./env");
+var connectionString = "".concat(env_1.default.databaseUrl);
+var adapter = new adapter_pg_1.PrismaPg({ connectionString: connectionString });
+var prisma = new client_1.PrismaClient({ adapter: adapter });
+exports.prisma = prisma;

@@ -80,11 +80,11 @@ export const getMyAssignedUsers = async (
  * @access  Counselor (own profile), ChurchAdmin, SuperAdmin
  */
 export const getCounselorDetails = async (
-  req: Request<Params>,
+  req: Request,
   res: Response,
 ) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
 
     if (req.account.role === "Counselor" && req.account.id !== id) {
       return res
@@ -112,11 +112,11 @@ export const getCounselorDetails = async (
  * @access  Counselor (own profile), ChurchAdmin, SuperAdmin
  */
 export const updateCounselorDetails = async (
-  req: Request<Params>,
+  req: Request,
   res: Response,
 ) => {
   try {
-    const { id } = req.params;
+    const id = req.params.id as string;
     const { bio } = req.body;
 
     if (req.account.role === "Counselor" && req.account.id !== id) {

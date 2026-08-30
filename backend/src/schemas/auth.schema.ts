@@ -9,6 +9,10 @@ export const LeadRegisterSchema = z
     firstName: z.string().min(2).openapi({ example: "Grace" }),
     lastName: z.string().min(2).openapi({ example: "Adeyemi" }),
     phone: z.string().optional().openapi({ example: "+2348012345678" }),
+    password: z.string().optional().openapi({ example: "OptionalPass123!" }),
+    authProvider: z.string().optional().openapi({ example: "local" }),
+    authProviderId: z.string().optional(),
+    gender: GenderEnum.optional(),
   })
   .openapi({
     description: "Step 1 Lead Registration Payload",

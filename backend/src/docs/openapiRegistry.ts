@@ -146,7 +146,7 @@ registry.registerPath({
 registry.registerPath({
   method: "post",
   path: "/auth/login",
-  tags: ["Auth"],
+  tags: ["Auths"],
   summary: "Account Credentials Login",
   description: "Authenticates any role and returns JWT bearer token.",
   request: {

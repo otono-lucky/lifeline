@@ -23,7 +23,7 @@ export const AuthLayout: React.FC<AuthLayoutProps> = ({
   children,
   heroBadge = "Faith-Based Matchmaking",
   heroTitle = ["Where Faith", "Meets Logic."],
-  heroSubtitle = "A covenant-focused, pastor-moderated community designed for marriage-minded believers.",
+  heroSubtitle = "A covenant-focused, moderated community designed for marriage-minded believers.",
 }) => {
   return (
     <SafeAreaView className="flex-1 bg-indigo-950" edges={["top"]}>

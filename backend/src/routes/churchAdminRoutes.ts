@@ -12,6 +12,12 @@ import {
 } from "../controllers/churchAdminController";
 import authMiddleware from "../middleware/authMiddleware";
 import requireRole from "../middleware/requireRole";
+import { validateBody } from "../middleware/validate";
+import {
+  CreateChurchAdminSchema,
+  UpdateChurchAdminSchema,
+  AssignCounselorSchema,
+} from "../schemas/church.schema";
 
 const router = express.Router();
 
@@ -33,6 +39,7 @@ router.get(
 router.post(
   "/assign-counselor",
   requireRole(["ChurchAdmin"]),
+  validateBody(AssignCounselorSchema),
   assignCounselor,
 );
 
@@ -40,6 +47,7 @@ router.post(
 router.post(
   "/create",
   requireRole(["SuperAdmin"]),
+  validateBody(CreateChurchAdminSchema),
   createChurchAdminAccount,
 );
 router.get(
@@ -55,6 +63,7 @@ router.get(
 router.put(
   "/:id",
   requireRole(["SuperAdmin", "ChurchAdmin"]),
+  validateBody(UpdateChurchAdminSchema),
   updateChurchAdminProfile,
 );
 

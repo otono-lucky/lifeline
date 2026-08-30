@@ -6,7 +6,7 @@ import storage from "./storage";
 import { ApiResponse } from "../types";
 
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000/api";
+  process.env.EXPO_PUBLIC_API_URL || "https://sincere-reasonably-mouse.ngrok-free.app/api";
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
