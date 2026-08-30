@@ -3,6 +3,7 @@ import cors from "cors";
 import routes from "./routes";
 import env from "./config/env";
 import { errorHandler } from "./middleware/errorHandler";
+import { setupSwagger } from "./docs/swaggerSetup";
 
 const app = express();
 const PORT = env.port;
@@ -15,6 +16,9 @@ const corsOptions = {
 // Middleware
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// API Documentation (Swagger UI)
+setupSwagger(app);
 
 // Routes
 app.use("/api", routes);
