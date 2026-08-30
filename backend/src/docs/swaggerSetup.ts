@@ -1,11 +1,14 @@
 // src/docs/swaggerSetup.ts
-// Swagger UI express middleware configuration
+// Dynamic Swagger UI Express middleware configuration powered by Zod OpenAPI Generator
 
-import { Express, Request, Response } from "express";
+import { Express, Request, Response, NextFunction } from "express";
 import swaggerUi from "swagger-ui-express";
-import { swaggerSpec } from "./swaggerSpec";
+import { generateOpenApiDocument } from "./openapiRegistry";
 
 export const setupSwagger = (app: Express): void => {
+  // Generate the OpenAPI 3.0 document dynamically from Zod schemas
+  const getDoc = () => generateOpenApiDocument();
+
   const customOptions: swaggerUi.SwaggerUiOptions = {
     customSiteTitle: "Lifeline API Documentation",
     customCss: `
@@ -21,19 +24,31 @@ export const setupSwagger = (app: Express): void => {
     },
   };
 
-  // Serve raw JSON spec
+  // Serve raw JSON spec dynamically
   app.get("/api/docs.json", (_req: Request, res: Response) => {
     res.setHeader("Content-Type", "application/json");
-    res.send(swaggerSpec);
+    res.json(getDoc());
   });
 
-  // Serve Swagger UI on /api/docs
-  app.use("/api/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, customOptions));
+  // Serve Swagger UI on /api/docs dynamically
+  app.use(
+    "/api/docs",
+    swaggerUi.serve,
+    (req: Request, res: Response, next: NextFunction) => {
+      swaggerUi.setup(getDoc(), customOptions)(req, res, next);
+    },
+  );
 
   // Serve Swagger UI on /docs as convenient alias
-  app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec, customOptions));
+  app.use(
+    "/docs",
+    swaggerUi.serve,
+    (req: Request, res: Response, next: NextFunction) => {
+      swaggerUi.setup(getDoc(), customOptions)(req, res, next);
+    },
+  );
 
-  console.log("Swagger Docs mounted at /api/docs and /docs");
+  console.log("Swagger Docs dynamically generated from Zod and mounted at /api/docs and /docs");
 };
 
 export default setupSwagger;
