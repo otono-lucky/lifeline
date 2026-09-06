@@ -89,7 +89,8 @@ export default function DiscoveryScreen() {
       );
       return;
     }
-    sendRequestMutation.mutate(candidate.accountId || candidate.id);
+    // sendRequest expects the User model PK (userId), not accountId
+    sendRequestMutation.mutate(candidate.userId || candidate.id);
   };
 
   return (
@@ -150,7 +151,7 @@ export default function DiscoveryScreen() {
                   {/* Photo Hero Banner */}
                   <TouchableOpacity
                     onPress={() =>
-                      router.push(`/(app)/candidate/${candidate.accountId || candidate.id}` as any)
+                      router.push(`/(app)/candidate/${candidate.accountId}` as any)
                     }
                     activeOpacity={0.9}
                     className="h-80 w-full relative bg-slate-900"
@@ -226,7 +227,7 @@ export default function DiscoveryScreen() {
                       <TouchableOpacity
                         onPress={() =>
                           router.push(
-                            `/(app)/candidate/${candidate.accountId || candidate.id}` as any,
+                            `/(app)/candidate/${candidate.accountId}` as any,
                           )
                         }
                         className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3.5 items-center justify-center"

@@ -69,6 +69,16 @@ export const registerLead = async (input: {
     },
   });
 
+  // Automatically dispatch verification email for non-social registrations
+  if (!input.authProvider) {
+    try {
+      await requestEmailVerification(account);
+      console.log(`[authService] Verification email dispatched for lead: ${account.email}`);
+    } catch (emailErr) {
+      console.warn(`[authService] Could not send initial verification email to ${account.email}:`, emailErr);
+    }
+  }
+
   return account;
 };
 

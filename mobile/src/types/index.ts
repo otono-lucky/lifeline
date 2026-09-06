@@ -92,8 +92,9 @@ export interface UserProfile {
 }
 
 export interface CandidateProfile {
-  id: string;
-  accountId: string;
+  id: string;           // legacy, same as userId
+  userId: string;       // User model PK — used for sendRequest
+  accountId: string;    // Account model PK — used for profile navigation
   firstName: string;
   lastName: string;
   gender: string;
@@ -124,51 +125,72 @@ export interface MatchRequest {
 }
 
 export interface ConversationParticipant {
-  id: string;
-  userId: string;
-  role: string;
-  user: {
-    firstName: string;
-    lastName: string;
-    photos: UserPhoto[];
-  };
+  accountId: string;  // Account.id — matches ConversationParticipant.accountId FK
+  roleInChat: string; // COUPLE_MEMBER | COUNSELOR | OBSERVER
+  firstName: string;
+  lastName: string;
+  photoUrl?: string | null;
+  isMe: boolean;
 }
 
 export interface Message {
   id: string;
   conversationId: string;
+  /** Message.senderId → Account.id. Use this to compute isMe: senderId === user.accountId */
   senderId: string;
   content: string;
   mediaUrl?: string;
   createdAt: string;
+  readAt?: string;
   sender: {
-    id: string;
+    id: string;           // Account.id
     firstName: string;
     lastName: string;
+    name: string;         // firstName + lastName combined
+    role?: string;
+    isMe: boolean;        // pre-computed by backend
   };
 }
 
 export interface Conversation {
+  /** Canonical ID — always use this for navigation and API calls */
   id: string;
+  /** Legacy alias for id — same value, kept for backward compatibility */
+  conversationId: string;
+  matchId: string;
   type: "COUPLE_PRIVATE" | "COUNSELOR_GROUP";
-  matchId?: string;
-  title?: string;
+  roleInChat: string;
   updatedAt: string;
-  lastMessage?: Message;
+  createdAt: string;
   participants: ConversationParticipant[];
+  lastMessage?: {
+    id: string;
+    senderId: string;
+    content: string;
+    mediaUrl?: string;
+    senderName: string;
+    isMe: boolean;
+    createdAt: string;
+  } | null;
 }
 
 export interface CalendarEvent {
   id: string;
   matchId: string;
-  createdById: string;
   title: string;
   description?: string;
   startTime: string;
   endTime: string;
   meetingLink?: string;
-  status: "PROPOSED" | "CONFIRMED" | "CANCELLED";
+  status: "PROPOSED" | "CONFIRMED" | "CANCELLED" | "COMPLETED";
   createdAt: string;
+  proposedBy: {
+    accountId: string;
+    name: string;
+    isMe: boolean;
+  };
+  /** Display name of the other match participant */
+  partnerName: string;
 }
 
 export interface ApiResponse<T> {

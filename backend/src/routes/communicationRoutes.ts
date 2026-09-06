@@ -8,6 +8,7 @@ import {
 } from "../schemas/communication.schema";
 import {
   getConversations,
+  getEvents,
   getMessages,
   postMessage,
   proposeEvent,
@@ -23,6 +24,7 @@ router.get("/conversations/:conversationId/messages", getMessages);
 router.post("/conversations/:conversationId/messages", validateBody(SendMessageSchema), postMessage);
 
 // Dynamic Calendar
+router.get("/events", getEvents);
 router.post("/matches/:matchId/events", validateBody(ProposeCalendarEventSchema), proposeEvent);
 router.patch("/events/:eventId/respond", validateBody(RespondCalendarEventSchema), respondEvent);
 

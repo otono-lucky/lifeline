@@ -34,7 +34,7 @@ export default function MessagesScreen() {
     queryKey: ["conversations"],
     queryFn: async () => {
       const response = await communicationService.getConversations();
-      return response.data || [];
+      return (response.data as Conversation[]) || [];
     },
     refetchInterval: 10000, // Poll every 10s for real-time conversation updates
   });
@@ -81,19 +81,25 @@ export default function MessagesScreen() {
           <View className="gap-3 pb-8">
             {conversations.map((conv: Conversation) => {
               const isGroup = conv.type === "COUNSELOR_GROUP";
-              const title =
-                conv.title ||
-                (isGroup
-                  ? "Counselor-Guided Group Chat"
-                  : "Private Couple Channel");
 
-              const otherParticipant = conv.participants?.find((p) => p.role === "User");
-              const photo = otherParticipant?.user?.photos?.[0]?.photoUrl;
+              // Derive partner details from enriched participants list
+              // Backend marks each participant with isMe: true/false
+              const partner = conv.participants?.find((p) => !p.isMe && p.roleInChat === "COUPLE_MEMBER");
+              const partnerName = partner
+                ? `${partner.firstName} ${partner.lastName}`
+                : isGroup
+                ? "Counselor-Guided Group Chat"
+                : "Private Couple Channel";
+
+              const photo = partner?.photoUrl ?? undefined;
+
+              // Use conv.id — the canonical field. conversationId is an alias.
+              const convId = conv.id;
 
               return (
                 <TouchableOpacity
-                  key={conv.id}
-                  onPress={() => router.push(`/(app)/chat/${conv.id}` as any)}
+                  key={convId}
+                  onPress={() => router.push(`/(app)/chat/${convId}` as any)}
                   activeOpacity={0.8}
                 >
                   <Card className="border border-slate-200 p-4 shadow-sm">
@@ -101,7 +107,7 @@ export default function MessagesScreen() {
                       <View className="flex-row items-center flex-1 mr-3">
                         <Avatar
                           url={photo}
-                          name={title}
+                          name={partnerName}
                           size="md"
                           isCounselor={isGroup}
                           isVerified={!isGroup}
@@ -113,7 +119,7 @@ export default function MessagesScreen() {
                               className="text-base font-bold text-slate-900"
                               numberOfLines={1}
                             >
-                              {title}
+                              {partnerName}
                             </Text>
                             {isGroup ? (
                               <Badge label="4-Party Moderated" variant="purple" />

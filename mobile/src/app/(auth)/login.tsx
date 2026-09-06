@@ -40,9 +40,10 @@ export default function LoginScreen() {
 
   const onSubmit = async (values: LoginFormValues) => {
     setIsLoading(true);
+    const email = values.email.trim().toLowerCase();
     try {
       const response = await authService.login({
-        email: values.email.trim().toLowerCase(),
+        email,
         password: values.password,
       });
 
@@ -51,7 +52,37 @@ export default function LoginScreen() {
         router.replace("/" as any);
       }
     } catch (error: any) {
-      Alert.alert("Sign In Failed", error.message || "Invalid credentials.");
+      const requiresVerification =
+        error?.response?.data?.errors?.requiresVerification === true ||
+        (error?.response?.status === 403 &&
+          (error?.response?.data?.message?.toLowerCase().includes("verify your email") ||
+           error?.message?.toLowerCase().includes("verify your email")));
+
+      if (requiresVerification) {
+        // Trigger email verification dispatch from client
+        try {
+          await authService.resendVerification(email);
+        } catch (resendErr) {
+          console.warn("[Login] Auto-resend on login failed or rate-limited:", resendErr);
+        }
+
+        Alert.alert(
+          "Email Not Verified",
+          `A verification link has been dispatched to ${email}. Please verify your email to log in.`,
+          [
+            {
+              text: "Check Email",
+              onPress: () =>
+                router.push({
+                  pathname: "/(auth)/verify-email",
+                  params: { email, autoSent: "true" },
+                } as any),
+            },
+          ]
+        );
+      } else {
+        Alert.alert("Sign In Failed", error.message || "Invalid credentials.");
+      }
     } finally {
       setIsLoading(false);
     }

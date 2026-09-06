@@ -43,8 +43,30 @@ export default function CandidateDetailModal() {
       if (!userId) return;
       try {
         const response = await discoveryService.getCandidateDetails(userId);
-        if (response.success && response.data?.candidate) {
-          setCandidate(response.data.candidate);
+        // GET /api/users/:accountId returns { user } (via getUserById)
+        // The discovery feed detail may return { candidate }
+        // Handle both shapes defensively — cast to any to avoid narrow-type errors
+        const data = response.data as any;
+        const raw = data?.user || data?.candidate || data;
+        if (raw) {
+          // Normalise photos: DB field is `url`, client type expects `photoUrl`
+          const normalised: CandidateProfile = {
+            ...raw,
+            id: raw.id || raw.accountId,
+            userId: raw.userId || raw.id,
+            accountId: raw.accountId || raw.id,
+            churchName:
+              raw.churchName ||
+              raw.church?.aka ||
+              raw.church?.officialName ||
+              undefined,
+            photos: (raw.photos || []).map((p: any) => ({
+              id: p.id,
+              photoUrl: p.photoUrl || p.url,
+              order: p.order,
+            })),
+          };
+          setCandidate(normalised);
         }
       } catch (err: any) {
         console.warn("Failed to fetch candidate details:", err);
@@ -59,7 +81,12 @@ export default function CandidateDetailModal() {
     if (!candidate) return;
     setIsSending(true);
     try {
-      const response = await requestService.sendRequest(candidate.accountId || candidate.id);
+      // Backend now supports dual-resolution (OR: [{ id: userId }, { accountId }])
+      // Prefer accountId (the route param we navigated with) as it's always available here.
+      // Falls back to userId (User.id) then id.
+      const response = await requestService.sendRequest(
+        candidate.accountId || candidate.userId || candidate.id,
+      );
       if (response.success) {
         Alert.alert(
           "Request Sent!",
