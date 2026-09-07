@@ -8,6 +8,7 @@ import {
   createUserAccountWithVerification,
   verifyEmail,
   requestPasswordReset,
+  validateResetPasswordToken,
   resetPassword,
   resendVerificationEmail,
   registerLead,
@@ -384,6 +385,29 @@ export const forgotPassword = async (req: Request, res: Response) => {
           error.message || "Server error processing password reset request",
         ),
       );
+  }
+};
+
+/**
+ * @desc    Validate password reset token before displaying the page
+ * @route   GET /api/auth/reset-password/:token
+ * @access  Public
+ */
+export const validateResetToken = async (req: Request, res: Response) => {
+  try {
+    const token = String(req.params.token);
+    const result = await validateResetPasswordToken(token);
+    return res.json(
+      successResponse("Reset token is valid", {
+        valid: true,
+        email: result.email,
+        firstName: result.firstName,
+      })
+    );
+  } catch (error: any) {
+    return res
+      .status(400)
+      .json(errorResponse(error.message || "Invalid or expired reset token"));
   }
 };
 

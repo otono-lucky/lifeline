@@ -8,6 +8,7 @@ import {
   verifyEmailToken,
   requestVerification,
   forgotPassword,
+  validateResetToken,
   resetPasswordWithToken,
   getCurrentUser,
   leadRegister,
@@ -37,6 +38,7 @@ router.post("/login", validateBody(LoginSchema), login);
 router.get("/verify-email/:token", verifyEmailToken);
 router.post("/request-verification", validateBody(RequestVerificationSchema), requestVerification);
 router.post("/forgot-password", validateBody(ForgotPasswordSchema), forgotPassword);
+router.get("/reset-password/:token", validateResetToken);
 router.post("/reset-password", validateBody(ResetPasswordSchema), resetPasswordWithToken);
 
 // Protected routes

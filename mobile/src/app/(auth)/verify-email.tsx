@@ -1,14 +1,13 @@
 // app/(auth)/verify-email.tsx
-// Phase 3: Email Verification Screen with 60s Countdown Timer & Resend
+// Email Verification Screen — email is locked from route params, not editable by user
 
 import React, { useState, useEffect } from "react";
-import { View, Text, Alert, TouchableOpacity } from "react-native";
+import { View, Text, Alert } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import AuthLayout from "../../components/layout/AuthLayout";
-import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import authService from "../../services/authService";
-import { MailCheck, Mail, ArrowRight, RefreshCw } from "lucide-react-native";
+import { MailCheck, ArrowRight, RefreshCw } from "lucide-react-native";
 import { useAuth } from "../../context/AuthContext";
 
 export default function VerifyEmailScreen() {
@@ -16,27 +15,27 @@ export default function VerifyEmailScreen() {
   const params = useLocalSearchParams<{ email?: string; autoSent?: string }>();
   const { user } = useAuth();
 
-  const [email, setEmail] = useState<string>(params.email || user?.email || "");
+  // Email is READ-ONLY — sourced from route params (set by lead-register or login redirect)
+  // Falls back to the authenticated user's email. Never editable by the user.
+  const email = params.email || user?.email || "";
+
   const [countdown, setCountdown] = useState<number>(60);
   const [canResend, setCanResend] = useState<boolean>(false);
   const [isResending, setIsResending] = useState<boolean>(false);
   const [autoSentBanner, setAutoSentBanner] = useState<boolean>(false);
 
   useEffect(() => {
-    if (params.email) {
-      setEmail(params.email);
-    }
-    // When arriving from login auto-resend, reset the countdown
+    // When arriving from login auto-resend, show the info banner and reset countdown
     if (params.autoSent === "true") {
       setCountdown(60);
       setCanResend(false);
       setAutoSentBanner(true);
     }
-  }, [params.email, params.autoSent]);
+  }, [params.autoSent]);
 
-  // 60-second industry standard countdown timer
+  // 60-second countdown timer (industry standard cooldown before resend is allowed)
   useEffect(() => {
-    let timer: NodeJS.Timeout;
+    let timer: ReturnType<typeof setInterval>;
     if (countdown > 0) {
       setCanResend(false);
       timer = setInterval(() => {
@@ -49,22 +48,22 @@ export default function VerifyEmailScreen() {
   }, [countdown]);
 
   const handleResend = async () => {
-    const targetEmail = email.trim().toLowerCase();
-    if (!targetEmail) {
-      Alert.alert("Required", "Please provide your registered email address.");
+    if (!email) {
+      Alert.alert("Error", "No email address on file. Please go back and sign in again.");
       return;
     }
 
     setIsResending(true);
     try {
-      await authService.resendVerification(targetEmail);
+      await authService.resendVerification(email);
       Alert.alert(
         "Verification Link Sent",
-        `We've sent a new verification link to ${targetEmail}. Please check your inbox or spam folder.`
+        `A new verification link has been sent to ${email}. Please check your inbox or spam folder.`
       );
       setCountdown(60);
       setCanResend(false);
     } catch (err: any) {
+      // Backend returns retryAfterSeconds on 429 rate-limit (now accessible since apiClient fix)
       const retryAfter = err?.response?.data?.errors?.retryAfterSeconds;
       if (retryAfter) {
         setCountdown(retryAfter);
@@ -91,6 +90,7 @@ export default function VerifyEmailScreen() {
           Check Your Inbox
         </Text>
 
+        {/* Display locked email address — not editable */}
         <Text className="text-sm text-slate-500 text-center mb-6 leading-relaxed max-w-xs">
           We sent a verification link to:{"\n"}
           <Text className="font-bold text-slate-900">
@@ -99,35 +99,21 @@ export default function VerifyEmailScreen() {
           {"\n"}Click the link in the email to activate your account.
         </Text>
 
-        {/* Banner shown when automatically redirected from login */}
+        {/* Info banner: shown when automatically redirected from login due to unverified email */}
         {autoSentBanner && (
-          <View className="w-full bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4 flex-row items-start gap-2">
-            <Text className="text-xs font-semibold text-amber-800 flex-1 leading-relaxed">
+          <View className="w-full bg-amber-50 border border-amber-200 rounded-2xl p-3 mb-4">
+            <Text className="text-xs font-semibold text-amber-800 leading-relaxed">
               A fresh verification link was automatically sent to your inbox because your email wasn't verified yet.
             </Text>
           </View>
         )}
 
-        {!params.email && !user?.email && (
-          <View className="w-full mb-4">
-            <Input
-              label="Registered Email Address"
-              placeholder="you@example.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              leftIcon={<Mail size={18} color="#64748B" />}
-              value={email}
-              onChangeText={setEmail}
-            />
-          </View>
-        )}
-
-        {/* Resend Action with Countdown */}
+        {/* Resend button with countdown — enabled after 60s */}
         <Button
           title={
             canResend
               ? "Resend Verification Link"
-              : `Resend Link in ${countdown}s`
+              : `Resend available in ${countdown}s`
           }
           variant="outline"
           disabled={!canResend || isResending}
@@ -137,7 +123,7 @@ export default function VerifyEmailScreen() {
           className="w-full mb-3"
         />
 
-        {/* Continue to Login Button */}
+        {/* CTA: once the user has clicked the link in their inbox, they tap this to go sign in */}
         <Button
           title="I've Verified My Email — Sign In"
           rightIcon={<ArrowRight size={18} color="#FFFFFF" />}
@@ -145,11 +131,9 @@ export default function VerifyEmailScreen() {
           className="w-full mb-4"
         />
 
-        <View className="flex-row items-center justify-center">
-          <Text className="text-xs text-slate-400">
-            Didn't receive anything? Check your spam/junk folder.
-          </Text>
-        </View>
+        <Text className="text-xs text-slate-400 text-center">
+          Didn't receive anything? Check your spam/junk folder.
+        </Text>
       </View>
     </AuthLayout>
   );

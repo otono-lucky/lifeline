@@ -1,7 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
+import { useFocusEffect } from "expo-router";
 import ScreenWrapper from "../../components/layout/ScreenWrapper";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";

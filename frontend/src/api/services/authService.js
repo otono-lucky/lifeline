@@ -39,11 +39,18 @@ export const authService = {
     return response.data;
   },
 
+  // Verify reset password token before showing reset form
+  verifyResetToken: async (token) => {
+    const response = await apiClient.get(`/auth/reset-password/${token}`);
+    return response.data;
+  },
+
   // Reset password
+  // Backend expects: { token, password, confirmPassword }
   resetPassword: async (token, password, confirmPassword) => {
     const response = await apiClient.post("/auth/reset-password", {
       token,
-      password,
+      password,        // must match backend ResetPasswordSchema field name
       confirmPassword,
     });
     return response.data;

@@ -41,50 +41,74 @@ export default function LoginScreen() {
   const onSubmit = async (values: LoginFormValues) => {
     setIsLoading(true);
     const email = values.email.trim().toLowerCase();
+    console.log("[LOGIN] ▶ onSubmit called. Email:", email);
+
     try {
+      console.log("[LOGIN] 📡 Calling authService.login...");
       const response = await authService.login({
         email,
         password: values.password,
       });
 
+      console.log("[LOGIN] ✅ Login response received:", JSON.stringify(response, null, 2));
+
       if (response.success && response.data.token) {
+        console.log("[LOGIN] 🔑 Token found. Calling login() context then navigating to /");
         await login(response.data.token, response.data.user);
         router.replace("/" as any);
+      } else {
+        console.warn("[LOGIN] ⚠️ Response was success=false or missing token:", response);
       }
     } catch (error: any) {
+      console.log("[LOGIN] 🚨 Caught error in login catch block");
+      console.log("[LOGIN]   error.message:", error?.message);
+      console.log("[LOGIN]   error.response?.status:", error?.response?.status);
+      console.log("[LOGIN]   error.response?.data:", JSON.stringify(error?.response?.data, null, 2));
+
+      const status = error?.response?.status;
+      const responseData = error?.response?.data;
+
+      const flag = responseData?.errors?.requiresVerification;
+      const msgMatch = responseData?.message?.toLowerCase().includes("verify your email");
+
+      console.log("[LOGIN]   status:", status);
+      console.log("[LOGIN]   requiresVerification flag:", flag);
+      console.log("[LOGIN]   message includes 'verify your email':", msgMatch);
+
+      // Detect unverified-email 403
       const requiresVerification =
-        error?.response?.data?.errors?.requiresVerification === true ||
-        (error?.response?.status === 403 &&
-          (error?.response?.data?.message?.toLowerCase().includes("verify your email") ||
-           error?.message?.toLowerCase().includes("verify your email")));
+        status === 403 && (flag === true || msgMatch);
+
+      console.log("[LOGIN]   → requiresVerification computed:", requiresVerification);
 
       if (requiresVerification) {
-        // Trigger email verification dispatch from client
-        try {
-          await authService.resendVerification(email);
-        } catch (resendErr) {
-          console.warn("[Login] Auto-resend on login failed or rate-limited:", resendErr);
-        }
+        const emailForResend = responseData?.errors?.email || email;
+        console.log("[LOGIN] 📧 Unverified email detected. emailForResend:", emailForResend);
 
-        Alert.alert(
-          "Email Not Verified",
-          `A verification link has been dispatched to ${email}. Please verify your email to log in.`,
-          [
-            {
-              text: "Check Email",
-              onPress: () =>
-                router.push({
-                  pathname: "/(auth)/verify-email",
-                  params: { email, autoSent: "true" },
-                } as any),
-            },
-          ]
-        );
+        // 1. Fire resend in background
+        console.log("[LOGIN] 📤 Firing resendVerification (fire-and-forget)...");
+        authService.resendVerification(emailForResend).catch((resendErr) => {
+          console.warn("[LOGIN] ❌ resendVerification failed:", resendErr?.response?.data || resendErr?.message);
+        });
+
+        // 2. Navigate immediately
+        console.log("[LOGIN] 🔀 Calling router.replace → /(auth)/verify-email with params:", {
+          email: emailForResend,
+          autoSent: "true",
+        });
+        router.replace({
+          pathname: "/(auth)/verify-email",
+          params: { email: emailForResend, autoSent: "true" },
+        } as any);
+        console.log("[LOGIN] ✅ router.replace called (navigation dispatched)");
+
       } else {
-        Alert.alert("Sign In Failed", error.message || "Invalid credentials.");
+        console.log("[LOGIN] ❌ Not a verification error. Showing generic alert.");
+        Alert.alert("Sign In Failed", responseData?.message || error.message || "Invalid credentials.");
       }
     } finally {
       setIsLoading(false);
+      console.log("[LOGIN] 🏁 onSubmit finally block. isLoading set to false.");
     }
   };
 
