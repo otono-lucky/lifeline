@@ -76,7 +76,11 @@ export default function MediaUploadScreen() {
         if (user?.accountId) {
           setUploadingSlot(index);
           try {
-            await userService.uploadPhoto(user.accountId, selectedUri, index + 1);
+            const uploadRes = await userService.uploadPhoto(user.accountId, selectedUri, index + 1);
+            if (uploadRes.data?.photo?.photoUrl) {
+              newPhotos[index] = uploadRes.data.photo.photoUrl;
+              setPhotos([...newPhotos]);
+            }
           } catch (uploadErr: any) {
             console.warn(`[MediaUpload] Direct upload failed for slot ${index + 1}:`, uploadErr);
           } finally {

@@ -490,23 +490,46 @@ export const createUserSocialMedia = async (
     );
   }
 
-  // Check if platform already added
-  const alreadyHasPlatform = user.socialMediaHandles.some(
+  // Check if platform already added -> upsert to ensure idempotency
+  const existingSocial = user.socialMediaHandles.find(
     (s) => s.platform.toLowerCase() === payload.platform.toLowerCase(),
   );
-  if (alreadyHasPlatform) {
-    throw new Error(`You have already added a ${payload.platform} handle`);
+
+  let record;
+  if (existingSocial) {
+    record = await prisma.userSocialMedia.update({
+      where: { id: existingSocial.id },
+      data: {
+        handleOrUrl: payload.handleOrUrl,
+      },
+    });
+    // If duplicate records existed previously, clean them up
+    const duplicates = user.socialMediaHandles.filter(
+      (s) =>
+        s.platform.toLowerCase() === payload.platform.toLowerCase() &&
+        s.id !== existingSocial.id,
+    );
+    if (duplicates.length > 0) {
+      await prisma.userSocialMedia.deleteMany({
+        where: { id: { in: duplicates.map((d) => d.id) } },
+      });
+    }
+  } else {
+    record = await prisma.userSocialMedia.create({
+      data: {
+        userId: user.id,
+        platform: payload.platform,
+        handleOrUrl: payload.handleOrUrl,
+      },
+    });
   }
 
-  const created = await prisma.userSocialMedia.create({
-    data: {
-      userId: user.id,
-      platform: payload.platform,
-      handleOrUrl: payload.handleOrUrl,
-    },
-  });
-
-  const allSocials = [...user.socialMediaHandles, created];
+  const allSocials = [
+    ...user.socialMediaHandles.filter(
+      (s) => s.platform.toLowerCase() !== payload.platform.toLowerCase(),
+    ),
+    record,
+  ];
   const completion = calculateProfileCompletion({
     ...user,
     photos: user.photos,
@@ -524,7 +547,7 @@ export const createUserSocialMedia = async (
     },
   });
 
-  return created;
+  return record;
 };
 
 export const deleteUserSocialMedia = async (

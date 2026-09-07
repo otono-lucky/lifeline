@@ -1,6 +1,7 @@
 // services/userService.ts
 // Profile enrichment, photo uploads, and social handles
 
+import { Platform } from "react-native";
 import apiClient from "./apiClient";
 import { ApiResponse, UserProfile, UserPhoto, SocialMediaHandle } from "../types";
 
@@ -21,12 +22,21 @@ export const userService = {
     const match = /\.(\w+)$/.exec(filename);
     const type = match ? `image/${match[1]}` : "image/jpeg";
 
-    // @ts-ignore: React Native FormData file signature
-    formData.append("image", {
-      uri: imageUri,
-      name: filename,
-      type,
-    });
+    if (Platform.OS === "web") {
+      // In browser/Expo Web, fetch the blob from blob: or data: URL so a real File/Blob is attached
+      const res = await fetch(imageUri);
+      const blob = await res.blob();
+      formData.append("image", blob, filename);
+    } else {
+      // In Native iOS/Android, React Native's custom FormData expects { uri, name, type }
+      // @ts-ignore: React Native FormData file signature
+      formData.append("image", {
+        uri: imageUri,
+        name: filename,
+        type,
+      });
+    }
+
     formData.append("order", String(order));
 
     const response = await apiClient.post<ApiResponse<{ photo: UserPhoto }>>(

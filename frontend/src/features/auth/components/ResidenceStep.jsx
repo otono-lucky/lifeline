@@ -1,13 +1,36 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Input from '../../../components/Input';
 
 const API_BASE = 'https://countriesnow.space/api/v0.1/countries';
+
+const COUNTRY_TO_ISO2 = {
+    nigeria: 'ng',
+    ghana: 'gh',
+    'united states': 'us',
+    'united kingdom': 'gb',
+    canada: 'ca',
+    'south africa': 'za',
+    kenya: 'ke',
+    uganda: 'ug',
+    rwanda: 'rw',
+    germany: 'de',
+    france: 'fr',
+    ireland: 'ie',
+    australia: 'au',
+};
 
 const ResidenceStep = ({ data, onChange, errors = {} }) => {
     const [countries, setCountries] = useState([]);
     const [states, setStates] = useState([]);
     const [cities, setCities] = useState([]);
     const [loading, setLoading] = useState({ countries: false, states: false, cities: false });
+
+    // Real-time location suggestions
+    const [addressQuery, setAddressQuery] = useState(data.residenceAddress || '');
+    const [suggestions, setSuggestions] = useState([]);
+    const [isSearchingLocation, setIsSearchingLocation] = useState(false);
+    const [showSuggestions, setShowSuggestions] = useState(false);
+    const debounceTimer = useRef(null);
 
     useEffect(() => {
         setLoading(prev => ({ ...prev, countries: true }));
@@ -17,6 +40,13 @@ const ResidenceStep = ({ data, onChange, errors = {} }) => {
                 const countryOptions = res.data
                     .map(c => ({ label: c.name, value: c.name }))
                     .sort((a, b) => a.label.localeCompare(b.label));
+
+                const ngIdx = countryOptions.findIndex(c => c.value.toLowerCase() === 'nigeria');
+                if (ngIdx > -1) {
+                    const [ng] = countryOptions.splice(ngIdx, 1);
+                    countryOptions.unshift(ng);
+                }
+
                 setCountries(countryOptions);
             })
             .catch(err => console.error('Error fetching countries:', err))
@@ -33,8 +63,11 @@ const ResidenceStep = ({ data, onChange, errors = {} }) => {
             })
                 .then(res => res.json())
                 .then(res => {
-                    const stateOptions = res.data.states
-                        .map(s => ({ label: s.name, value: s.name }))
+                    const stateOptions = (res.data?.states || [])
+                        .map(s => {
+                            const clean = s.name.replace(/\s+State$/i, '');
+                            return { label: clean, value: clean };
+                        })
                         .sort((a, b) => a.label.localeCompare(b.label));
                     setStates(stateOptions);
                 })
@@ -56,7 +89,7 @@ const ResidenceStep = ({ data, onChange, errors = {} }) => {
             })
                 .then(res => res.json())
                 .then(res => {
-                    const cityOptions = res.data
+                    const cityOptions = (res.data || [])
                         .map(city => ({ label: city, value: city }))
                         .sort((a, b) => a.label.localeCompare(b.label));
                     setCities(cityOptions);
@@ -68,6 +101,83 @@ const ResidenceStep = ({ data, onChange, errors = {} }) => {
         }
         if (!data.sameAsOrigin && data.residenceCity) onChange({ target: { name: 'residenceCity', value: '' } });
     }, [data.residenceCountry, data.residenceState]);
+
+    // Handle address autocomplete query
+    const handleAddressChange = (e) => {
+        const val = e.target.value;
+        setAddressQuery(val);
+        onChange({ target: { name: 'residenceAddress', value: val } });
+
+        if (!val || val.trim().length < 2) {
+            setSuggestions([]);
+            setShowSuggestions(false);
+            return;
+        }
+
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+        debounceTimer.current = setTimeout(async () => {
+            setIsSearchingLocation(true);
+            try {
+                const countryKey = (data.residenceCountry || '').toLowerCase().trim();
+                const iso2 = COUNTRY_TO_ISO2[countryKey] || (countryKey.length === 2 ? countryKey : '');
+                const countryFilter = iso2 ? `&countrycodes=${encodeURIComponent(iso2)}` : '';
+
+                // Scope query by city and state if selected: e.g. "Admiralty, Lekki, Lagos"
+                const scopedQuery = [val, data.residenceCity, data.residenceState]
+                    .filter((part, idx, arr) => part && arr.indexOf(part) === idx)
+                    .join(', ');
+
+                let url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(scopedQuery)}&format=json&addressdetails=1&limit=5${countryFilter}`;
+
+                let res = await fetch(url, {
+                    headers: { 'User-Agent': 'LifelineWeb/1.0', Accept: 'application/json' },
+                });
+
+                let items = [];
+                if (res.ok) {
+                    items = await res.json();
+                }
+
+                // If 0 results with city/state, fallback to raw query with country filter
+                if ((!items || items.length === 0) && (data.residenceCity || data.residenceState)) {
+                    url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(val)}&format=json&addressdetails=1&limit=5${countryFilter}`;
+                    res = await fetch(url, {
+                        headers: { 'User-Agent': 'LifelineWeb/1.0', Accept: 'application/json' },
+                    });
+                    if (res.ok) items = await res.json();
+                }
+
+                if (Array.isArray(items)) {
+                    setSuggestions(items);
+                    setShowSuggestions(items.length > 0);
+                }
+            } catch (err) {
+                console.warn('Location suggestion fetch failed:', err);
+            } finally {
+                setIsSearchingLocation(false);
+            }
+        }, 350);
+    };
+
+    const handleSelectSuggestion = (item) => {
+        const addr = item.address || {};
+        const street = addr.road || addr.pedestrian || addr.building || item.display_name.split(',')[0];
+        const city = addr.city || addr.town || addr.village || addr.suburb || addr.county || '';
+        const state = (addr.state || '').replace(/\s+State$/i, '');
+
+        setAddressQuery(street);
+        onChange({ target: { name: 'residenceAddress', value: street } });
+        if (state && !data.residenceState) {
+            onChange({ target: { name: 'residenceState', value: state } });
+        }
+        if (city && !data.residenceCity) {
+            onChange({ target: { name: 'residenceCity', value: city } });
+        }
+
+        setShowSuggestions(false);
+        setSuggestions([]);
+    };
 
     return (
         <div className="space-y-6">
@@ -124,14 +234,67 @@ const ResidenceStep = ({ data, onChange, errors = {} }) => {
                 error={errors.residenceCity}
             />
 
-            <Input
-                label="House Address"
-                name="residenceAddress"
-                value={data.residenceAddress}
-                onChange={onChange}
-                placeholder="No. 123, Faith Avenue..."
-                error={errors.residenceAddress}
-            />
+            {/* House Address with Location Keyword Suggestions */}
+            <div className="relative">
+                <Input
+                    label={
+                        <span className="flex items-center justify-between">
+                            <span>House Address / Location</span>
+                            {(data.residenceCity || data.residenceState || data.residenceCountry) && (
+                                <span className="text-xs text-blue-600 font-medium">
+                                    Scoped to: {[data.residenceCity, data.residenceState, data.residenceCountry].filter(Boolean).join(', ')}
+                                </span>
+                            )}
+                        </span>
+                    }
+                    name="residenceAddress"
+                    value={addressQuery}
+                    onChange={handleAddressChange}
+                    onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                    placeholder="Type street, landmark, or area (e.g. Admiralty Way)..."
+                    error={errors.residenceAddress}
+                />
+
+                {isSearchingLocation && (
+                    <div className="absolute right-3 top-10 text-xs text-slate-400 animate-pulse">
+                        Searching...
+                    </div>
+                )}
+
+                {/* Suggestions Dropdown */}
+                {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 overflow-hidden">
+                        <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-100 flex items-center justify-between text-xs font-semibold uppercase text-slate-400">
+                            <span>
+                                Verified Places ({[data.residenceCity, data.residenceState, data.residenceCountry].filter(Boolean).join(', ') || 'Global'})
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() => setShowSuggestions(false)}
+                                className="text-blue-600 hover:text-blue-800"
+                            >
+                                Close
+                            </button>
+                        </div>
+                        <ul className="max-h-56 overflow-y-auto divide-y divide-slate-100">
+                            {suggestions.map((item, idx) => (
+                                <li
+                                    key={`${item.place_id}_${idx}`}
+                                    onClick={() => handleSelectSuggestion(item)}
+                                    className="p-3 hover:bg-blue-50/60 cursor-pointer text-left transition-colors"
+                                >
+                                    <div className="font-semibold text-sm text-slate-800">
+                                        {item.display_name.split(',')[0]}
+                                    </div>
+                                    <div className="text-xs text-slate-400 truncate">
+                                        {item.display_name}
+                                    </div>
+                                </li>
+                            ))}
+                        </ul>
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

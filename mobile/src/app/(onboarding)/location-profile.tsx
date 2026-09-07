@@ -1,6 +1,6 @@
 // app/(onboarding)/location-profile.tsx
 // Phase 4: Step 2 Origin & Residence Location + WhatsApp Number
-// Standardized & verified location selection via countriesnow.space API
+// Standardized & verified location selection with real-time keyword suggestions biased by Country of Residence
 
 import React, { useState, useEffect } from "react";
 import { View, Text, Alert, Switch } from "react-native";
@@ -10,8 +10,9 @@ import ProgressBar from "../../components/ui/ProgressBar";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import SelectModal, { SelectOption } from "../../components/ui/SelectModal";
+import LocationAutocomplete from "../../components/ui/LocationAutocomplete";
 import userService from "../../services/userService";
-import locationService from "../../services/locationService";
+import locationService, { LocationSuggestion } from "../../services/locationService";
 import { useAuth } from "../../context/AuthContext";
 import { MapPin, Globe, PhoneCall } from "lucide-react-native";
 
@@ -27,6 +28,10 @@ export default function LocationProfileScreen() {
     residenceState: user?.residenceState || "",
     residenceCity: user?.residenceCity || "",
     residenceAddress: user?.residenceAddress || "",
+    residenceFormattedAddress: (user as any)?.residenceFormattedAddress || "",
+    residenceLatitude: (user as any)?.residenceLatitude || null,
+    residenceLongitude: (user as any)?.residenceLongitude || null,
+    residencePlaceId: (user as any)?.residencePlaceId || null,
     whatsappNumber: user?.whatsappNumber || user?.phone || "",
   });
 
@@ -159,12 +164,35 @@ export default function LocationProfileScreen() {
         residenceState: prev.originState,
         residenceCity: prev.originLga,
       }));
-      // Clear residence-related validation errors
       setErrors((prev) => {
         const updated = { ...prev };
         delete updated.residenceCountry;
         delete updated.residenceState;
         delete updated.residenceCity;
+        return updated;
+      });
+    }
+  };
+
+  // Handle selecting a suggested verified location
+  const handleSelectLocationSuggestion = (suggestion: LocationSuggestion) => {
+    setFormData((prev) => ({
+      ...prev,
+      residenceAddress: suggestion.streetAddress || suggestion.mainText,
+      residenceFormattedAddress: suggestion.formattedAddress,
+      residenceLatitude: suggestion.latitude,
+      residenceLongitude: suggestion.longitude,
+      residencePlaceId: suggestion.placeId,
+      // If suggestion resolved state/city, update them
+      residenceState: suggestion.state || prev.residenceState,
+      residenceCity: suggestion.city || prev.residenceCity,
+    }));
+
+    // Clear address error if any
+    if (errors.residenceAddress) {
+      setErrors((prev) => {
+        const updated = { ...prev };
+        delete updated.residenceAddress;
         return updated;
       });
     }
@@ -200,7 +228,12 @@ export default function LocationProfileScreen() {
           residenceState: formData.residenceState.trim(),
           residenceCity: formData.residenceCity.trim(),
           residenceAddress: formData.residenceAddress.trim(),
-          residenceFormattedAddress: `${formData.residenceAddress}, ${formData.residenceCity}, ${formData.residenceState}`,
+          residenceFormattedAddress:
+            formData.residenceFormattedAddress ||
+            `${formData.residenceAddress}, ${formData.residenceCity}, ${formData.residenceState}`,
+          residenceLatitude: formData.residenceLatitude,
+          residenceLongitude: formData.residenceLongitude,
+          residencePlaceId: formData.residencePlaceId,
           whatsappNumber: formData.whatsappNumber.trim(),
         } as any);
 
@@ -213,7 +246,10 @@ export default function LocationProfileScreen() {
           residenceCity: formData.residenceCity,
           residenceAddress: formData.residenceAddress,
           whatsappNumber: formData.whatsappNumber,
-        });
+          residenceLatitude: formData.residenceLatitude,
+          residenceLongitude: formData.residenceLongitude,
+          residenceFormattedAddress: formData.residenceFormattedAddress,
+        } as any);
       }
       router.push("/(onboarding)/career-financial" as any);
     } catch (err: any) {
@@ -384,16 +420,27 @@ export default function LocationProfileScreen() {
         </View>
       </View>
 
-      <Input
-        label="Street Address"
-        placeholder="e.g. 12 Admiralty Way"
-        helperText="Exact street address is strictly confidential (Privacy Firewall)."
+      {/* ── Street Address with Keyword Autocomplete Suggestion ───── */}
+      <LocationAutocomplete
+        label="Street Address / Location"
+        placeholder="Type street, landmark, or neighborhood..."
         value={formData.residenceAddress}
-        onChangeText={(text) => setFormData({ ...formData, residenceAddress: text })}
+        countryOfResidence={formData.residenceCountry}
+        stateOfResidence={formData.residenceState}
+        cityOfResidence={formData.residenceCity}
+        onChangeText={(text) =>
+          setFormData((prev) => ({
+            ...prev,
+            residenceAddress: text,
+            residenceFormattedAddress: "",
+          }))
+        }
+        onSelectSuggestion={handleSelectLocationSuggestion}
+        helperText="Exact street address is strictly confidential (Privacy Firewall). Suggestions are scoped to your selected state and city."
         error={errors.residenceAddress}
       />
 
-      {/* Dual Phone: WhatsApp Support */}
+      {/* Counselor Verification Line */}
       <Text className="text-sm font-bold text-slate-900 mt-2 mb-2">Counselor Verification Line</Text>
       <Input
         label="WhatsApp Phone Number"

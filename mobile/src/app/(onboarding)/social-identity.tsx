@@ -63,18 +63,32 @@ export default function SocialIdentityScreen() {
     setError("");
     try {
       if (user?.accountId) {
-        // Synchronize socials
-        const promises = [];
-        if (linkedin.trim()) {
-          promises.push(userService.addSocial(user.accountId, "LinkedIn", linkedin.trim()));
+        // Synchronize socials idempotently
+        const syncPromises = [];
+        const platforms: Array<{ name: "LinkedIn" | "Instagram" | "Facebook"; value: string }> = [
+          { name: "LinkedIn", value: linkedin.trim() },
+          { name: "Instagram", value: instagram.trim() },
+          { name: "Facebook", value: facebook.trim() },
+        ];
+
+        for (const p of platforms) {
+          const existing = existingSocials.find(
+            (s) => s.platform.toLowerCase() === p.name.toLowerCase(),
+          );
+          if (p.value) {
+            // Upsert handle
+            if (!existing || existing.handleOrUrl !== p.value) {
+              syncPromises.push(userService.addSocial(user.accountId, p.name, p.value));
+            }
+          } else if (existing) {
+            // Handle was removed
+            syncPromises.push(userService.removeSocial(user.accountId, existing.id));
+          }
         }
-        if (instagram.trim()) {
-          promises.push(userService.addSocial(user.accountId, "Instagram", instagram.trim()));
+
+        if (syncPromises.length > 0) {
+          await Promise.all(syncPromises);
         }
-        if (facebook.trim()) {
-          promises.push(userService.addSocial(user.accountId, "Facebook", facebook.trim()));
-        }
-        await Promise.all(promises);
       }
       router.push("/(onboarding)/media-upload" as any);
     } catch (err: any) {
