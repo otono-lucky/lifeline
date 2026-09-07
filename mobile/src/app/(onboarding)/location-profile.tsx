@@ -1,14 +1,17 @@
 // app/(onboarding)/location-profile.tsx
 // Phase 4: Step 2 Origin & Residence Location + WhatsApp Number
+// Standardized & verified location selection via countriesnow.space API
 
-import React, { useState } from "react";
-import { View, Text, Alert } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Alert, Switch } from "react-native";
 import { useRouter } from "expo-router";
 import ScreenWrapper from "../../components/layout/ScreenWrapper";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
+import SelectModal, { SelectOption } from "../../components/ui/SelectModal";
 import userService from "../../services/userService";
+import locationService from "../../services/locationService";
 import { useAuth } from "../../context/AuthContext";
 import { MapPin, Globe, PhoneCall } from "lucide-react-native";
 
@@ -27,17 +30,157 @@ export default function LocationProfileScreen() {
     whatsappNumber: user?.whatsappNumber || user?.phone || "",
   });
 
+  const [sameAsOrigin, setSameAsOrigin] = useState(false);
+
+  // Available options
+  const [countryOptions, setCountryOptions] = useState<SelectOption[]>([]);
+  const [originStateOptions, setOriginStateOptions] = useState<SelectOption[]>([]);
+  const [originLgaOptions, setOriginLgaOptions] = useState<SelectOption[]>([]);
+  const [residenceStateOptions, setResidenceStateOptions] = useState<SelectOption[]>([]);
+  const [residenceCityOptions, setResidenceCityOptions] = useState<SelectOption[]>([]);
+
+  // Loading states
+  const [isLoadingCountries, setIsLoadingCountries] = useState(false);
+  const [isLoadingOriginStates, setIsLoadingOriginStates] = useState(false);
+  const [isLoadingOriginLgas, setIsLoadingOriginLgas] = useState(false);
+  const [isLoadingResidenceStates, setIsLoadingResidenceStates] = useState(false);
+  const [isLoadingResidenceCities, setIsLoadingResidenceCities] = useState(false);
+
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
 
+  // 1. Load countries on mount
+  useEffect(() => {
+    const fetchCountries = async () => {
+      setIsLoadingCountries(true);
+      try {
+        const countries = await locationService.getCountries();
+        setCountryOptions(countries);
+      } catch (err) {
+        console.warn("Failed to load countries:", err);
+      } finally {
+        setIsLoadingCountries(false);
+      }
+    };
+    fetchCountries();
+  }, []);
+
+  // 2. Load origin states when originCountry changes
+  useEffect(() => {
+    if (!formData.originCountry) {
+      setOriginStateOptions([]);
+      return;
+    }
+
+    const fetchStates = async () => {
+      setIsLoadingOriginStates(true);
+      try {
+        const states = await locationService.getStates(formData.originCountry);
+        setOriginStateOptions(states);
+      } catch (err) {
+        console.warn("Failed to load origin states:", err);
+      } finally {
+        setIsLoadingOriginStates(false);
+      }
+    };
+    fetchStates();
+  }, [formData.originCountry]);
+
+  // 3. Load origin LGAs/cities when originState changes
+  useEffect(() => {
+    if (!formData.originCountry || !formData.originState) {
+      setOriginLgaOptions([]);
+      return;
+    }
+
+    const fetchCities = async () => {
+      setIsLoadingOriginLgas(true);
+      try {
+        const lgas = await locationService.getCities(formData.originCountry, formData.originState);
+        setOriginLgaOptions(lgas);
+      } catch (err) {
+        console.warn("Failed to load origin LGAs:", err);
+      } finally {
+        setIsLoadingOriginLgas(false);
+      }
+    };
+    fetchCities();
+  }, [formData.originCountry, formData.originState]);
+
+  // 4. Load residence states when residenceCountry changes
+  useEffect(() => {
+    if (!formData.residenceCountry) {
+      setResidenceStateOptions([]);
+      return;
+    }
+
+    const fetchStates = async () => {
+      setIsLoadingResidenceStates(true);
+      try {
+        const states = await locationService.getStates(formData.residenceCountry);
+        setResidenceStateOptions(states);
+      } catch (err) {
+        console.warn("Failed to load residence states:", err);
+      } finally {
+        setIsLoadingResidenceStates(false);
+      }
+    };
+    fetchStates();
+  }, [formData.residenceCountry]);
+
+  // 5. Load residence cities when residenceState changes
+  useEffect(() => {
+    if (!formData.residenceCountry || !formData.residenceState) {
+      setResidenceCityOptions([]);
+      return;
+    }
+
+    const fetchCities = async () => {
+      setIsLoadingResidenceCities(true);
+      try {
+        const cities = await locationService.getCities(formData.residenceCountry, formData.residenceState);
+        setResidenceCityOptions(cities);
+      } catch (err) {
+        console.warn("Failed to load residence cities:", err);
+      } finally {
+        setIsLoadingResidenceCities(false);
+      }
+    };
+    fetchCities();
+  }, [formData.residenceCountry, formData.residenceState]);
+
+  // Handle "Same as Place of Origin" toggle
+  const handleToggleSameAsOrigin = (enabled: boolean) => {
+    setSameAsOrigin(enabled);
+    if (enabled) {
+      setFormData((prev) => ({
+        ...prev,
+        residenceCountry: prev.originCountry,
+        residenceState: prev.originState,
+        residenceCity: prev.originLga,
+      }));
+      // Clear residence-related validation errors
+      setErrors((prev) => {
+        const updated = { ...prev };
+        delete updated.residenceCountry;
+        delete updated.residenceState;
+        delete updated.residenceCity;
+        return updated;
+      });
+    }
+  };
+
   const validate = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.originState.trim()) newErrors.originState = "State of origin is required";
-    if (!formData.originLga.trim()) newErrors.originLga = "LGA is required";
-    if (!formData.residenceState.trim()) newErrors.residenceState = "Current state of residence is required";
-    if (!formData.residenceCity.trim()) newErrors.residenceCity = "City is required";
-    if (!formData.residenceAddress.trim()) newErrors.residenceAddress = "Residential address is required";
-    if (!formData.whatsappNumber.trim()) newErrors.whatsappNumber = "WhatsApp number is required";
+    if (!formData.originCountry?.trim()) newErrors.originCountry = "Country of origin is required";
+    if (!formData.originState?.trim()) newErrors.originState = "State of origin is required";
+    if (!formData.originLga?.trim()) newErrors.originLga = "LGA is required";
+
+    if (!formData.residenceCountry?.trim()) newErrors.residenceCountry = "Country of residence is required";
+    if (!formData.residenceState?.trim()) newErrors.residenceState = "State of residence is required";
+    if (!formData.residenceCity?.trim()) newErrors.residenceCity = "City is required";
+    if (!formData.residenceAddress?.trim()) newErrors.residenceAddress = "Street address is required";
+    if (!formData.whatsappNumber?.trim()) newErrors.whatsappNumber = "WhatsApp number is required";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -85,6 +228,7 @@ export default function LocationProfileScreen() {
       title="Location & Heritage"
       subtitle="Step 2 of 7"
       showBack={true}
+      isScrollable={true}
     >
       <ProgressBar currentStep={2} totalSteps={7} label="Step 2: Location" />
 
@@ -92,53 +236,150 @@ export default function LocationProfileScreen() {
         Where Are You Located?
       </Text>
       <Text className="text-sm text-slate-500 mb-6">
-        Your origin and residence details enable proximity weighting while preserving exact address privacy.
+        Select your verified location details for accurate proximity matching while preserving exact address privacy.
       </Text>
 
-      {/* State of Origin Section */}
+      {/* ── State of Origin Section ─────────────────────────────────── */}
       <Text className="text-sm font-bold text-slate-900 mb-2">Heritage & Origin</Text>
+
+      <SelectModal
+        label="Country of Origin"
+        placeholder="Select country"
+        value={formData.originCountry}
+        options={countryOptions}
+        isLoading={isLoadingCountries}
+        leftIcon={<Globe size={18} color="#64748B" />}
+        error={errors.originCountry}
+        onSelect={(country) => {
+          setFormData((prev) => ({
+            ...prev,
+            originCountry: country,
+            originState: "",
+            originLga: "",
+            ...(sameAsOrigin
+              ? { residenceCountry: country, residenceState: "", residenceCity: "" }
+              : {}),
+          }));
+        }}
+      />
+
       <View className="flex-row gap-3">
         <View className="flex-1">
-          <Input
+          <SelectModal
             label="State of Origin"
-            placeholder="e.g. Lagos, Edo, Enugu"
-            leftIcon={<Globe size={18} color="#64748B" />}
+            placeholder="Select state"
             value={formData.originState}
-            onChangeText={(text) => setFormData({ ...formData, originState: text })}
+            options={originStateOptions}
+            disabled={!formData.originCountry || isLoadingOriginStates}
+            isLoading={isLoadingOriginStates}
             error={errors.originState}
+            onSelect={(state) => {
+              setFormData((prev) => ({
+                ...prev,
+                originState: state,
+                originLga: "",
+                ...(sameAsOrigin ? { residenceState: state, residenceCity: "" } : {}),
+              }));
+            }}
           />
         </View>
+
         <View className="flex-1">
-          <Input
-            label="LGA"
-            placeholder="e.g. Ikeja, Oredo"
+          <SelectModal
+            label="LGA of Origin"
+            placeholder="Select LGA"
             value={formData.originLga}
-            onChangeText={(text) => setFormData({ ...formData, originLga: text })}
+            options={originLgaOptions}
+            disabled={!formData.originState || isLoadingOriginLgas}
+            isLoading={isLoadingOriginLgas}
+            allowCustomInput={true}
             error={errors.originLga}
+            onSelect={(lga) => {
+              setFormData((prev) => ({
+                ...prev,
+                originLga: lga,
+                ...(sameAsOrigin ? { residenceCity: lga } : {}),
+              }));
+            }}
           />
         </View>
       </View>
 
-      {/* Current Residence Section */}
+      {/* ── Same as Origin Checkbox/Toggle ───────────────────────────── */}
+      <View className="my-3 flex-row items-center justify-between rounded-2xl border border-blue-100 bg-blue-50/60 p-4">
+        <View className="flex-1 mr-3">
+          <Text className="text-sm font-bold text-blue-950">
+            Residence Same as Place of Origin
+          </Text>
+          <Text className="text-xs text-blue-800/80 mt-0.5">
+            Auto-fill current residence from your heritage details above
+          </Text>
+        </View>
+        <Switch
+          value={sameAsOrigin}
+          onValueChange={handleToggleSameAsOrigin}
+          trackColor={{ false: "#CBD5E1", true: "#2563EB" }}
+          thumbColor="#FFFFFF"
+        />
+      </View>
+
+      {/* ── Current Residence Section ───────────────────────────────── */}
       <Text className="text-sm font-bold text-slate-900 mt-2 mb-2">Current Residence</Text>
+
+      {!sameAsOrigin && (
+        <SelectModal
+          label="Country of Residence"
+          placeholder="Select country"
+          value={formData.residenceCountry}
+          options={countryOptions}
+          isLoading={isLoadingCountries}
+          leftIcon={<Globe size={18} color="#64748B" />}
+          error={errors.residenceCountry}
+          onSelect={(country) => {
+            setFormData((prev) => ({
+              ...prev,
+              residenceCountry: country,
+              residenceState: "",
+              residenceCity: "",
+            }));
+          }}
+        />
+      )}
+
       <View className="flex-row gap-3">
         <View className="flex-1">
-          <Input
+          <SelectModal
             label="State of Residence"
-            placeholder="e.g. Lagos, FCT Abuja"
-            leftIcon={<MapPin size={18} color="#64748B" />}
+            placeholder="Select state"
             value={formData.residenceState}
-            onChangeText={(text) => setFormData({ ...formData, residenceState: text })}
+            options={residenceStateOptions}
+            disabled={sameAsOrigin || !formData.residenceCountry || isLoadingResidenceStates}
+            isLoading={isLoadingResidenceStates}
+            leftIcon={<MapPin size={18} color="#64748B" />}
             error={errors.residenceState}
+            onSelect={(state) => {
+              setFormData((prev) => ({
+                ...prev,
+                residenceState: state,
+                residenceCity: "",
+              }));
+            }}
           />
         </View>
+
         <View className="flex-1">
-          <Input
+          <SelectModal
             label="City / Town"
-            placeholder="e.g. Lekki, Maitama"
+            placeholder="Select city"
             value={formData.residenceCity}
-            onChangeText={(text) => setFormData({ ...formData, residenceCity: text })}
+            options={residenceCityOptions}
+            disabled={sameAsOrigin || !formData.residenceState || isLoadingResidenceCities}
+            isLoading={isLoadingResidenceCities}
+            allowCustomInput={true}
             error={errors.residenceCity}
+            onSelect={(city) => {
+              setFormData((prev) => ({ ...prev, residenceCity: city }));
+            }}
           />
         </View>
       </View>
