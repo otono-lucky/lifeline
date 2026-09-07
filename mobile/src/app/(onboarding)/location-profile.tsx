@@ -3,8 +3,8 @@
 // Standardized & verified location selection with real-time keyword suggestions biased by Country of Residence
 
 import React, { useState, useEffect } from "react";
-import { View, Text, Alert, Switch } from "react-native";
-import { useRouter } from "expo-router";
+import { View, Text, Alert, Switch, TouchableOpacity } from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import ScreenWrapper from "../../components/layout/ScreenWrapper";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Input from "../../components/ui/Input";
@@ -14,25 +14,31 @@ import LocationAutocomplete from "../../components/ui/LocationAutocomplete";
 import userService from "../../services/userService";
 import locationService, { LocationSuggestion } from "../../services/locationService";
 import { useAuth } from "../../context/AuthContext";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import { MapPin, Globe, PhoneCall } from "lucide-react-native";
 
 export default function LocationProfileScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const isFromReview = from === "review";
   const { user, updateLocalUser } = useAuth();
+  const { profile, invalidateProfile } = useUserProfile();
+
+  const current = profile || user;
 
   const [formData, setFormData] = useState({
-    originCountry: user?.originCountry || "Nigeria",
-    originState: user?.originState || "",
-    originLga: user?.originLga || "",
-    residenceCountry: user?.residenceCountry || "Nigeria",
-    residenceState: user?.residenceState || "",
-    residenceCity: user?.residenceCity || "",
-    residenceAddress: user?.residenceAddress || "",
-    residenceFormattedAddress: (user as any)?.residenceFormattedAddress || "",
-    residenceLatitude: (user as any)?.residenceLatitude || null,
-    residenceLongitude: (user as any)?.residenceLongitude || null,
-    residencePlaceId: (user as any)?.residencePlaceId || null,
-    whatsappNumber: user?.whatsappNumber || user?.phone || "",
+    originCountry: current?.originCountry || "Nigeria",
+    originState: current?.originState || "",
+    originLga: current?.originLga || "",
+    residenceCountry: current?.residenceCountry || "Nigeria",
+    residenceState: current?.residenceState || "",
+    residenceCity: current?.residenceCity || "",
+    residenceAddress: current?.residenceAddress || "",
+    residenceFormattedAddress: (current as any)?.residenceFormattedAddress || "",
+    residenceLatitude: (current as any)?.residenceLatitude || null,
+    residenceLongitude: (current as any)?.residenceLongitude || null,
+    residencePlaceId: (current as any)?.residencePlaceId || null,
+    whatsappNumber: current?.whatsappNumber || current?.phone || "",
   });
 
   const [sameAsOrigin, setSameAsOrigin] = useState(false);
@@ -217,6 +223,25 @@ export default function LocationProfileScreen() {
   const handleContinue = async () => {
     if (!validate()) return;
 
+    const isDirty =
+      formData.originCountry.trim() !== (current?.originCountry || "Nigeria") ||
+      formData.originState.trim() !== (current?.originState || "") ||
+      formData.originLga.trim() !== (current?.originLga || "") ||
+      formData.residenceCountry.trim() !== (current?.residenceCountry || "Nigeria") ||
+      formData.residenceState.trim() !== (current?.residenceState || "") ||
+      formData.residenceCity.trim() !== (current?.residenceCity || "") ||
+      formData.residenceAddress.trim() !== (current?.residenceAddress || "") ||
+      formData.whatsappNumber.trim() !== (current?.whatsappNumber || current?.phone || "");
+
+    if (!isDirty) {
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/career-financial" as any);
+      }
+      return;
+    }
+
     setIsSaving(true);
     try {
       if (user?.accountId) {
@@ -250,8 +275,13 @@ export default function LocationProfileScreen() {
           residenceLongitude: formData.residenceLongitude,
           residenceFormattedAddress: formData.residenceFormattedAddress,
         } as any);
+        invalidateProfile();
       }
-      router.push("/(onboarding)/career-financial" as any);
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/career-financial" as any);
+      }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to save location details.");
     } finally {
@@ -259,11 +289,38 @@ export default function LocationProfileScreen() {
     }
   };
 
+  const isDirty =
+    formData.originCountry.trim() !== (current?.originCountry || "Nigeria") ||
+    formData.originState.trim() !== (current?.originState || "") ||
+    formData.originLga.trim() !== (current?.originLga || "") ||
+    formData.residenceCountry.trim() !== (current?.residenceCountry || "Nigeria") ||
+    formData.residenceState.trim() !== (current?.residenceState || "") ||
+    formData.residenceCity.trim() !== (current?.residenceCity || "") ||
+    formData.residenceAddress.trim() !== (current?.residenceAddress || "") ||
+    formData.whatsappNumber.trim() !== (current?.whatsappNumber || current?.phone || "");
+
   return (
     <ScreenWrapper
       title="Location & Heritage"
       subtitle="Step 2 of 7"
       showBack={true}
+      onBack={() => {
+        if (isFromReview) {
+          router.push("/(onboarding)/completion-review" as any);
+        } else {
+          router.push("/(onboarding)/church-selection" as any);
+        }
+      }}
+      rightAction={
+        !isFromReview ? (
+          <TouchableOpacity
+            onPress={() => router.push("/(onboarding)/completion-review" as any)}
+            className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200"
+          >
+            <Text className="text-xs font-bold text-blue-600">Review</Text>
+          </TouchableOpacity>
+        ) : undefined
+      }
       isScrollable={true}
     >
       <ProgressBar currentStep={2} totalSteps={7} label="Step 2: Location" />
@@ -454,7 +511,13 @@ export default function LocationProfileScreen() {
       />
 
       <Button
-        title="Continue to Career & Finances"
+        title={
+          isFromReview
+            ? isDirty
+              ? "Save & Return to Review"
+              : "Return to Review"
+            : "Continue to Career & Finances"
+        }
         isLoading={isSaving}
         onPress={handleContinue}
         className="mt-6 mb-8"

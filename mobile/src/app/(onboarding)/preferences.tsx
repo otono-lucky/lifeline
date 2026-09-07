@@ -3,7 +3,7 @@
 
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, Alert, ScrollView } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import ScreenWrapper from "../../components/layout/ScreenWrapper";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Button from "../../components/ui/Button";
@@ -11,6 +11,7 @@ import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
 import userService from "../../services/userService";
 import { useAuth } from "../../context/AuthContext";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import { MatchPreferenceType } from "../../types";
 import { Church, Compass, Sparkles, Check, Heart } from "lucide-react-native";
 
@@ -61,14 +62,19 @@ const AVAILABLE_INTERESTS: string[] = [
 
 export default function PreferencesScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const isFromReview = from === "review";
   const { user, updateLocalUser } = useAuth();
+  const { profile, invalidateProfile } = useUserProfile();
+
+  const current = profile || user;
 
   const [preference, setPreference] = useState<MatchPreferenceType>(
-    user?.matchPreference || "my_church_plus",
+    current?.matchPreference || "my_church_plus",
   );
 
   const [selectedInterests, setSelectedInterests] = useState<string[]>(
-    Array.isArray(user?.interests) ? (user?.interests as string[]) : [],
+    Array.isArray(current?.interests) ? (current?.interests as string[]) : [],
   );
 
   const [isSaving, setIsSaving] = useState(false);
@@ -83,9 +89,26 @@ export default function PreferencesScreen() {
     }
   };
 
+  const currentInterests = Array.isArray(current?.interests)
+    ? [...(current.interests as string[])].sort()
+    : [];
+  const sortedNewInterests = [...selectedInterests].sort();
+  const isInterestsEqual =
+    currentInterests.length === sortedNewInterests.length &&
+    currentInterests.every((val, idx) => val === sortedNewInterests[idx]);
+  const isDirty =
+    preference !== (current?.matchPreference || "my_church_plus") ||
+    !isInterestsEqual;
+
   const handleContinue = async () => {
     if (selectedInterests.length < 3) {
       setError("Please select at least 3 interests to ensure faith and compatibility alignment.");
+      return;
+    }
+
+    // Bypass network call if untouched
+    if (!isDirty) {
+      router.push("/(onboarding)/completion-review" as any);
       return;
     }
 
@@ -102,6 +125,7 @@ export default function PreferencesScreen() {
           matchPreference: preference,
           interests: selectedInterests,
         });
+        invalidateProfile();
       }
       router.push("/(onboarding)/completion-review" as any);
     } catch (err: any) {
@@ -116,6 +140,23 @@ export default function PreferencesScreen() {
       title="Preferences & Interests"
       subtitle="Step 6 of 7"
       showBack={true}
+      onBack={() => {
+        if (isFromReview) {
+          router.push("/(onboarding)/completion-review" as any);
+        } else {
+          router.push("/(onboarding)/media-upload" as any);
+        }
+      }}
+      rightAction={
+        !isFromReview ? (
+          <TouchableOpacity
+            onPress={() => router.push("/(onboarding)/completion-review" as any)}
+            className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200"
+          >
+            <Text className="text-xs font-bold text-blue-600">Review</Text>
+          </TouchableOpacity>
+        ) : undefined
+      }
     >
       <ProgressBar currentStep={6} totalSteps={7} label="Step 6: Preferences" />
 
@@ -229,7 +270,13 @@ export default function PreferencesScreen() {
       </View>
 
       <Button
-        title="Review & Complete Profile"
+        title={
+          isFromReview
+            ? isDirty
+              ? "Save & Return to Review"
+              : "Return to Review"
+            : "Review & Complete Profile"
+        }
         isLoading={isSaving}
         onPress={handleContinue}
         className="mb-8"

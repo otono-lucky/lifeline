@@ -10,7 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import ScreenWrapper from "../../components/layout/ScreenWrapper";
 import ProgressBar from "../../components/ui/ProgressBar";
@@ -20,26 +20,32 @@ import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
 import userService from "../../services/userService";
 import { useAuth } from "../../context/AuthContext";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import { Camera, Video, Plus, CheckCircle, Upload, Film } from "lucide-react-native";
 
 export default function MediaUploadScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const isFromReview = from === "review";
   const { user, updateLocalUser, refreshUser } = useAuth();
+  const { profile, invalidateProfile } = useUserProfile();
+
+  const current = profile || user;
 
   // 3 Photo slots
   const [photos, setPhotos] = useState<string[]>([
-    user?.photos?.[0]?.photoUrl || "",
-    user?.photos?.[1]?.photoUrl || "",
-    user?.photos?.[2]?.photoUrl || "",
+    current?.photos?.[0]?.photoUrl || (current?.photos?.[0] as any)?.url || "",
+    current?.photos?.[1]?.photoUrl || (current?.photos?.[1] as any)?.url || "",
+    current?.photos?.[2]?.photoUrl || (current?.photos?.[2] as any)?.url || "",
   ]);
 
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
 
   const [videoIntroUrl, setVideoIntroUrl] = useState(
-    user?.videoIntroUrl || "",
+    current?.videoIntroUrl || "",
   );
   const [videoDuration, setVideoDuration] = useState<number>(
-    user?.videoDurationSeconds || 30,
+    current?.videoDurationSeconds || 30,
   );
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
@@ -80,6 +86,7 @@ export default function MediaUploadScreen() {
             if (uploadRes.data?.photo?.photoUrl) {
               newPhotos[index] = uploadRes.data.photo.photoUrl;
               setPhotos([...newPhotos]);
+              invalidateProfile();
             }
           } catch (uploadErr: any) {
             console.warn(`[MediaUpload] Direct upload failed for slot ${index + 1}:`, uploadErr);
@@ -129,6 +136,12 @@ export default function MediaUploadScreen() {
     }
   };
 
+  const isVideoDirty =
+    videoIntroUrl.trim() !== (current?.videoIntroUrl || "").trim() ||
+    videoDuration !== (current?.videoDurationSeconds || 30);
+  const hasPendingPhotos = photos.some((p) => p && !p.startsWith("http"));
+  const isDirty = isVideoDirty || hasPendingPhotos;
+
   const handleContinue = async () => {
     if (filledPhotosCount < 3) {
       setError("Exactly 3 profile pictures are required to ensure authentic visual verification.");
@@ -143,11 +156,21 @@ export default function MediaUploadScreen() {
       return;
     }
 
+    // Bypass network calls if untouched
+    if (!isDirty) {
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/preferences" as any);
+      }
+      return;
+    }
+
     setIsSaving(true);
     setError("");
     try {
       if (user?.accountId) {
-        // Upload any photo that might need saving
+        // Upload any photo that might still need saving
         for (let i = 0; i < 3; i++) {
           const photoUri = photos[i];
           if (photoUri && !photoUri.startsWith("http")) {
@@ -159,19 +182,26 @@ export default function MediaUploadScreen() {
           }
         }
 
-        await userService.updateProfile(user.accountId, {
-          videoIntroUrl: videoIntroUrl.trim(),
-          videoDurationSeconds: videoDuration,
-        } as any);
+        if (isVideoDirty) {
+          await userService.updateProfile(user.accountId, {
+            videoIntroUrl: videoIntroUrl.trim(),
+            videoDurationSeconds: videoDuration,
+          } as any);
 
-        updateLocalUser({
-          videoIntroUrl: videoIntroUrl.trim(),
-          videoDurationSeconds: videoDuration,
-        });
+          updateLocalUser({
+            videoIntroUrl: videoIntroUrl.trim(),
+            videoDurationSeconds: videoDuration,
+          });
+        }
 
+        invalidateProfile();
         await refreshUser();
       }
-      router.push("/(onboarding)/preferences" as any);
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/preferences" as any);
+      }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to save media footprint.");
     } finally {
@@ -184,6 +214,23 @@ export default function MediaUploadScreen() {
       title="Photos & Video"
       subtitle="Step 5 of 7"
       showBack={true}
+      onBack={() => {
+        if (isFromReview) {
+          router.push("/(onboarding)/completion-review" as any);
+        } else {
+          router.push("/(onboarding)/social-identity" as any);
+        }
+      }}
+      rightAction={
+        !isFromReview ? (
+          <TouchableOpacity
+            onPress={() => router.push("/(onboarding)/completion-review" as any)}
+            className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200"
+          >
+            <Text className="text-xs font-bold text-blue-600">Review</Text>
+          </TouchableOpacity>
+        ) : undefined
+      }
     >
       <ProgressBar currentStep={5} totalSteps={7} label="Step 5: Media" />
 
@@ -312,7 +359,13 @@ export default function MediaUploadScreen() {
       ) : null}
 
       <Button
-        title="Continue to Match Scope"
+        title={
+          isFromReview
+            ? isDirty
+              ? "Save & Return to Review"
+              : "Return to Review"
+            : "Continue to Match Scope"
+        }
         disabled={!isMediaComplete}
         isLoading={isSaving}
         onPress={handleContinue}

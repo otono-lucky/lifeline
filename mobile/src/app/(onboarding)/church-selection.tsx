@@ -10,7 +10,7 @@ import {
   Alert,
   ActivityIndicator,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import ScreenWrapper from "../../components/layout/ScreenWrapper";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Input from "../../components/ui/Input";
@@ -19,6 +19,7 @@ import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
 import userService from "../../services/userService";
 import { useAuth } from "../../context/AuthContext";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import { Church, CheckCircle, ChevronRight, Building } from "lucide-react-native";
 
 interface ChurchOption {
@@ -32,14 +33,22 @@ interface ChurchOption {
 
 export default function ChurchSelectionScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const isFromReview = from === "review";
   const { user, updateLocalUser } = useAuth();
+  const { profile, invalidateProfile } = useUserProfile();
 
   const [churches, setChurches] = useState<ChurchOption[]>([]);
   const [selectedChurch, setSelectedChurch] = useState<ChurchOption | null>(null);
-  const [branchName, setBranchName] = useState(user?.branchName || "");
+  const [branchName, setBranchName] = useState(
+    profile?.branchName || user?.branchName || "",
+  );
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
+
+  const activeChurchId = profile?.churchId || user?.churchId;
+  const activeBranchName = (profile?.branchName || user?.branchName || "").trim();
 
   useEffect(() => {
     const fetchChurches = async () => {
@@ -47,8 +56,8 @@ export default function ChurchSelectionScreen() {
         const response = await userService.getPublicChurches();
         if (response.success) {
           setChurches(response.data.churches);
-          if (user?.churchId) {
-            const current = response.data.churches.find((c) => c.id === user.churchId);
+          if (activeChurchId) {
+            const current = response.data.churches.find((c) => c.id === activeChurchId);
             if (current) setSelectedChurch(current);
           }
         }
@@ -59,7 +68,17 @@ export default function ChurchSelectionScreen() {
       }
     };
     fetchChurches();
-  }, [user?.churchId]);
+  }, [activeChurchId]);
+
+  useEffect(() => {
+    if (activeBranchName && !branchName) {
+      setBranchName(activeBranchName);
+    }
+  }, [activeBranchName]);
+
+  const isDirty =
+    selectedChurch?.id !== activeChurchId ||
+    branchName.trim() !== activeBranchName;
 
   const handleContinue = async () => {
     if (!selectedChurch) {
@@ -68,6 +87,16 @@ export default function ChurchSelectionScreen() {
     }
     if (selectedChurch.churchModel === "PARENT_BRANCH" && !branchName.trim()) {
       setError("Please specify your parish / branch name (e.g. City of David, Jesus House)");
+      return;
+    }
+
+    // Bypass network update if untouched
+    if (!isDirty) {
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/location-profile" as any);
+      }
       return;
     }
 
@@ -85,8 +114,13 @@ export default function ChurchSelectionScreen() {
           churchName: selectedChurch.officialName,
           branchName: branchName.trim(),
         });
+        invalidateProfile();
       }
-      router.push("/(onboarding)/location-profile" as any);
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/location-profile" as any);
+      }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to save church selection.");
     } finally {
@@ -99,7 +133,23 @@ export default function ChurchSelectionScreen() {
       title="Church Affiliation"
       subtitle="Step 1 of 7"
       showBack={true}
-      onBack={() => router.replace("/(auth)/login" as any)}
+      onBack={() => {
+        if (isFromReview) {
+          router.push("/(onboarding)/completion-review" as any);
+        } else {
+          router.replace("/(auth)/login" as any);
+        }
+      }}
+      rightAction={
+        !isFromReview ? (
+          <TouchableOpacity
+            onPress={() => router.push("/(onboarding)/completion-review" as any)}
+            className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200"
+          >
+            <Text className="text-xs font-bold text-blue-600">Review</Text>
+          </TouchableOpacity>
+        ) : undefined
+      }
     >
       <ProgressBar currentStep={1} totalSteps={7} label="Step 1: Church" />
 
@@ -202,7 +252,13 @@ export default function ChurchSelectionScreen() {
           ) : null}
 
           <Button
-            title="Continue to Location & Heritage"
+            title={
+              isFromReview
+                ? isDirty
+                  ? "Save & Return to Review"
+                  : "Return to Review"
+                : "Continue to Location & Heritage"
+            }
             isLoading={isSaving}
             onPress={handleContinue}
             className="mt-6 mb-8"

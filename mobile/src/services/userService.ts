@@ -6,6 +6,14 @@ import apiClient from "./apiClient";
 import { ApiResponse, UserProfile, UserPhoto, SocialMediaHandle } from "../types";
 
 export const userService = {
+  // Get Full User Profile
+  getProfile: async (userId: string) => {
+    const response = await apiClient.get<ApiResponse<{ user: UserProfile }>>(
+      `/users/${userId}`,
+    );
+    return response.data;
+  },
+
   // Update Profile Data (recalculates 100% completion score)
   updateProfile: async (userId: string, data: Partial<UserProfile>) => {
     const response = await apiClient.put<ApiResponse<{ user: UserProfile }>>(
