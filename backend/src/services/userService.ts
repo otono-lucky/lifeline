@@ -10,6 +10,7 @@ import {
   REQUIRED_PHOTOS_COUNT,
   SOCIAL_PLATFORM_OPTIONS,
 } from "../constants";
+import { deleteImageFromCloudinary } from "./mediaService";
 
 export { SOCIAL_PLATFORM_OPTIONS };
 
@@ -406,6 +407,24 @@ export const saveUserPhoto = async (
   });
 
   if (!user) throw new Error("User not found");
+
+  // If a photo already exists in this slot, clean up previous asset from Cloudinary
+  const existingPhoto = user.photos.find((p) => p.order === order);
+  if (existingPhoto) {
+    const oldIdentifier = existingPhoto.publicId || existingPhoto.url;
+    if (
+      oldIdentifier &&
+      existingPhoto.publicId !== publicId &&
+      existingPhoto.url !== photoUrl
+    ) {
+      deleteImageFromCloudinary(oldIdentifier).catch((err) => {
+        console.warn(
+          `[userService] Failed to delete replaced photo asset (${oldIdentifier}):`,
+          err?.message,
+        );
+      });
+    }
+  }
 
   const savedPhoto = await prisma.userPhoto.upsert({
     where: {
