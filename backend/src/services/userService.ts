@@ -10,6 +10,7 @@ import {
   REQUIRED_PHOTOS_COUNT,
   SOCIAL_PLATFORM_OPTIONS,
 } from "../constants";
+import { deleteImageFromCloudinary } from "./mediaService";
 
 export { SOCIAL_PLATFORM_OPTIONS };
 
@@ -407,6 +408,24 @@ export const saveUserPhoto = async (
 
   if (!user) throw new Error("User not found");
 
+  // If a photo already exists in this slot, clean up previous asset from Cloudinary
+  const existingPhoto = user.photos.find((p) => p.order === order);
+  if (existingPhoto) {
+    const oldIdentifier = existingPhoto.publicId || existingPhoto.url;
+    if (
+      oldIdentifier &&
+      existingPhoto.publicId !== publicId &&
+      existingPhoto.url !== photoUrl
+    ) {
+      deleteImageFromCloudinary(oldIdentifier).catch((err) => {
+        console.warn(
+          `[userService] Failed to delete replaced photo asset (${oldIdentifier}):`,
+          err?.message,
+        );
+      });
+    }
+  }
+
   const savedPhoto = await prisma.userPhoto.upsert({
     where: {
       userId_order: {
@@ -490,23 +509,46 @@ export const createUserSocialMedia = async (
     );
   }
 
-  // Check if platform already added
-  const alreadyHasPlatform = user.socialMediaHandles.some(
+  // Check if platform already added -> upsert to ensure idempotency
+  const existingSocial = user.socialMediaHandles.find(
     (s) => s.platform.toLowerCase() === payload.platform.toLowerCase(),
   );
-  if (alreadyHasPlatform) {
-    throw new Error(`You have already added a ${payload.platform} handle`);
+
+  let record;
+  if (existingSocial) {
+    record = await prisma.userSocialMedia.update({
+      where: { id: existingSocial.id },
+      data: {
+        handleOrUrl: payload.handleOrUrl,
+      },
+    });
+    // If duplicate records existed previously, clean them up
+    const duplicates = user.socialMediaHandles.filter(
+      (s) =>
+        s.platform.toLowerCase() === payload.platform.toLowerCase() &&
+        s.id !== existingSocial.id,
+    );
+    if (duplicates.length > 0) {
+      await prisma.userSocialMedia.deleteMany({
+        where: { id: { in: duplicates.map((d) => d.id) } },
+      });
+    }
+  } else {
+    record = await prisma.userSocialMedia.create({
+      data: {
+        userId: user.id,
+        platform: payload.platform,
+        handleOrUrl: payload.handleOrUrl,
+      },
+    });
   }
 
-  const created = await prisma.userSocialMedia.create({
-    data: {
-      userId: user.id,
-      platform: payload.platform,
-      handleOrUrl: payload.handleOrUrl,
-    },
-  });
-
-  const allSocials = [...user.socialMediaHandles, created];
+  const allSocials = [
+    ...user.socialMediaHandles.filter(
+      (s) => s.platform.toLowerCase() !== payload.platform.toLowerCase(),
+    ),
+    record,
+  ];
   const completion = calculateProfileCompletion({
     ...user,
     photos: user.photos,
@@ -524,7 +566,7 @@ export const createUserSocialMedia = async (
     },
   });
 
-  return created;
+  return record;
 };
 
 export const deleteUserSocialMedia = async (

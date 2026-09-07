@@ -11,7 +11,6 @@ import AuthLayout from "../../components/layout/AuthLayout";
 import Input from "../../components/ui/Input";
 import Button from "../../components/ui/Button";
 import authService from "../../services/authService";
-import { useAuth } from "../../context/AuthContext";
 import { Mail, Phone, Lock, User, ArrowRight } from "lucide-react-native";
 
 const leadRegisterSchema = z
@@ -33,7 +32,6 @@ type LeadRegisterFormValues = z.infer<typeof leadRegisterSchema>;
 
 export default function LeadRegisterScreen() {
   const router = useRouter();
-  const { login } = useAuth();
   const [isLoading, setIsLoading] = useState(false);
 
   const {
@@ -60,18 +58,21 @@ export default function LeadRegisterScreen() {
   const onSubmit = async (values: LeadRegisterFormValues) => {
     setIsLoading(true);
     try {
+      const email = values.email.trim().toLowerCase();
       const response = await authService.registerLead({
         firstName: values.firstName.trim(),
         lastName: values.lastName.trim(),
-        email: values.email.trim().toLowerCase(),
+        email,
         phone: values.phone.trim(),
         gender: values.gender,
         password: values.password,
       });
 
-      if (response.success && response.data.token) {
-        await login(response.data.token, response.data.user);
-        router.replace("/(onboarding)/church-selection" as any);
+      if (response.success) {
+        router.replace({
+          pathname: "/(auth)/verify-email",
+          params: { email },
+        } as any);
       }
     } catch (error: any) {
       Alert.alert("Registration Failed", error.message || "An error occurred during registration.");
@@ -92,9 +93,17 @@ export default function LeadRegisterScreen() {
         gender: currentGender,
       });
 
-      if (response.success && response.data.token) {
-        await login(response.data.token, response.data.user);
-        router.replace("/(onboarding)/church-selection" as any);
+      if (response.success) {
+        Alert.alert(
+          "Account Connected",
+          "Your account has been created. Please sign in to complete your profile.",
+          [
+            {
+              text: "Continue to Sign In",
+              onPress: () => router.replace("/(auth)/login" as any),
+            },
+          ]
+        );
       }
     } catch (error: any) {
       Alert.alert("Social Sign-In Failed", error.message || "Failed to authenticate.");
@@ -253,7 +262,7 @@ export default function LeadRegisterScreen() {
 
       {/* Submit Button */}
       <Button
-        title="Continue to Onboarding"
+        title="Create Account"
         isLoading={isLoading}
         rightIcon={<ArrowRight size={18} color="#FFFFFF" />}
         onPress={handleSubmit(onSubmit)}

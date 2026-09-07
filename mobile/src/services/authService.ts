@@ -69,6 +69,17 @@ export const authService = {
     const response = await apiClient.post<ApiResponse<null>>("/auth/request-verification", { email });
     return response.data;
   },
+
+  // Reset password using token from the reset-password email link
+  // Calls POST /api/auth/reset-password with { token, password, confirmPassword }
+  resetPassword: async (token: string, password: string, confirmPassword: string) => {
+    const response = await apiClient.post<ApiResponse<null>>("/auth/reset-password", {
+      token,
+      password,
+      confirmPassword,
+    });
+    return response.data;
+  },
 };
 
 export default authService;

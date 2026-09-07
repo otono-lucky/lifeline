@@ -1,9 +1,7 @@
-// app/(vetting)/pending.tsx
-// Phase 5: Pending Vetting Screen (Awaiting Counselor Call)
-
-import React, { useState } from "react";
+import React, { useState, useCallback } from "react";
 import { View, Text, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import ScreenWrapper from "../../components/layout/ScreenWrapper";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
@@ -16,14 +14,21 @@ export default function PendingVettingScreen() {
   const { user, refreshUser, logout } = useAuth();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Auto-refresh when the screen gains focus (e.g. user returns to app after counsellor approval)
+  useFocusEffect(
+    useCallback(() => {
+      refreshUser();
+      // After refreshUser updates Zustand, the (app)/_layout.tsx gatekeeper
+      // will automatically redirect to /discovery if vettingStatus = VETTED_ACTIVE.
+      // No manual redirect needed here — the gatekeeper handles it.
+    }, [])
+  );
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     await refreshUser();
+    // Let the gatekeeper handle routing — do NOT read stale user state here
     setIsRefreshing(false);
-    // If status became VETTED_ACTIVE, redirect to discovery
-    if (user?.vettingStatus === "VETTED_ACTIVE") {
-      router.replace("/(app)/(tabs)/discovery" as any);
-    }
   };
 
   return (

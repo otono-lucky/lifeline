@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import {
   getConversationMessages,
+  getUserCalendarEvents,
   listUserConversations,
   proposeCalendarEvent,
   respondToCalendarEvent,
@@ -159,6 +160,30 @@ export const respondEvent = async (req: Request, res: Response) => {
     return res.status(400).json({
       success: false,
       message: error.message || "Failed to respond to calendar event",
+      errors: error.message,
+    });
+  }
+};
+
+export const getEvents = async (req: Request, res: Response) => {
+  try {
+    const accountId = req.account?.id;
+    if (!accountId) {
+      return res.status(401).json({ success: false, message: "Unauthorized" });
+    }
+
+    const events = await getUserCalendarEvents(accountId);
+
+    return res.json({
+      success: true,
+      message: "Calendar events retrieved",
+      data: events,
+      errors: null,
+    });
+  } catch (error: any) {
+    return res.status(400).json({
+      success: false,
+      message: error.message || "Failed to fetch calendar events",
       errors: error.message,
     });
   }

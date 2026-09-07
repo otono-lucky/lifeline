@@ -8,6 +8,7 @@ import {
   createUserAccountWithVerification,
   verifyEmail,
   requestPasswordReset,
+  validateResetPasswordToken,
   resetPassword,
   resendVerificationEmail,
   registerLead,
@@ -388,6 +389,29 @@ export const forgotPassword = async (req: Request, res: Response) => {
 };
 
 /**
+ * @desc    Validate password reset token before displaying the page
+ * @route   GET /api/auth/reset-password/:token
+ * @access  Public
+ */
+export const validateResetToken = async (req: Request, res: Response) => {
+  try {
+    const token = String(req.params.token);
+    const result = await validateResetPasswordToken(token);
+    return res.json(
+      successResponse("Reset token is valid", {
+        valid: true,
+        email: result.email,
+        firstName: result.firstName,
+      })
+    );
+  } catch (error: any) {
+    return res
+      .status(400)
+      .json(errorResponse(error.message || "Invalid or expired reset token"));
+  }
+};
+
+/**
  * @desc    Reset password with token
  * @route   POST /api/auth/reset-password
  * @access  Public
@@ -448,6 +472,32 @@ export const getCurrentUser = async (req: Request, res: Response) => {
             churchId: true,
           },
         },
+        user: {
+          select: {
+            id: true,
+            vettingStatus: true,
+            profileCompletionPercentage: true,
+            isVerified: true,
+            gender: true,
+            dateOfBirth: true,
+            subscriptionTier: true,
+            subscriptionStatus: true,
+            churchId: true,
+            church: {
+              select: { officialName: true, aka: true },
+            },
+            occupation: true,
+            salaryRange: true,
+            residenceState: true,
+            residenceCity: true,
+            residenceAddress: true,
+            profilePictureUrl: true,
+            photos: {
+              orderBy: { order: "asc" },
+              select: { id: true, url: true, order: true },
+            },
+          },
+        },
       },
     });
 
@@ -455,7 +505,35 @@ export const getCurrentUser = async (req: Request, res: Response) => {
       return res.status(404).json(errorResponse("Account not found"));
     }
 
-    res.json(successResponse("User fetched successfully", { user: account }));
+    // Flatten account + user profile into a single response object
+    const { user: userProfile, ...accountFields } = account;
+
+    res.json(
+      successResponse("User fetched successfully", {
+        user: {
+          ...accountFields,
+          // User profile fields (null-safe for non-User roles with no profile row)
+          accountId: account.id,
+          userId: userProfile?.id ?? null,
+          vettingStatus: userProfile?.vettingStatus ?? "DRAFT",
+          profileCompletionPercentage: userProfile?.profileCompletionPercentage ?? 0,
+          isVerified: userProfile?.isVerified ?? false,
+          gender: userProfile?.gender ?? null,
+          dateOfBirth: userProfile?.dateOfBirth ?? null,
+          subscriptionTier: userProfile?.subscriptionTier ?? null,
+          subscriptionStatus: userProfile?.subscriptionStatus ?? null,
+          churchId: userProfile?.churchId ?? null,
+          churchName: userProfile?.church?.aka ?? userProfile?.church?.officialName ?? null,
+          occupation: userProfile?.occupation ?? null,
+          salaryRange: userProfile?.salaryRange ?? null,
+          residenceState: userProfile?.residenceState ?? null,
+          residenceCity: userProfile?.residenceCity ?? null,
+          residenceAddress: userProfile?.residenceAddress ?? null,
+          profilePictureUrl: userProfile?.profilePictureUrl ?? null,
+          photos: userProfile?.photos ?? [],
+        },
+      })
+    );
   } catch (error: any) {
     res
       .status(500)

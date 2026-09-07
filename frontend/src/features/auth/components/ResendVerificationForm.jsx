@@ -1,20 +1,20 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { authService } from "../../../api/services";
 import { Toast } from "../../../components/Toast";
 
 const ResendVerificationForm = ({ initialEmail = "", onPreviewReady }) => {
   const navigate = useNavigate();
-  const [email, setEmail] = useState(() => {
-    // Try to get email from sessionStorage first, then use initialEmail prop
+  // Read email ONLY from session storage or props — never allow manual user input to avoid manipulation
+  const [email] = useState(() => {
     const stored = sessionStorage.getItem("signupEmail");
     return stored || initialEmail || "";
   });
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
   const isEmailValid = /\S+@\S+\.\S+/.test(email);
-  const needsEmailInput = !isEmailValid;
   const isCoolingDown = cooldownSeconds > 0;
 
   useEffect(() => {
@@ -27,22 +27,19 @@ const ResendVerificationForm = ({ initialEmail = "", onPreviewReady }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!isEmailValid) {
+      setToast({
+        type: "error",
+        message: "No registered email found in session. Please sign in first.",
+      });
+      return;
+    }
+
     setLoading(true);
-
     try {
-      if (!email || !/\S+@\S+\.\S+/.test(email)) {
-        setToast({
-          type: "error",
-          message: "Please enter a valid email address",
-        });
-        setLoading(false);
-        return;
-      }
-
       const result = await authService.requestVerification(email);
 
       if (result.success) {
-        sessionStorage.setItem("signupEmail", email);
         const preview = result?.data?.emailPreview;
         if (preview?.html) {
           sessionStorage.setItem("emailPreviewHtml", preview.html);
@@ -61,8 +58,11 @@ const ResendVerificationForm = ({ initialEmail = "", onPreviewReady }) => {
             "Open Verification Link",
           );
         }
-        setCooldownSeconds(120);
-        navigate("/verify-email", { replace: true });
+        setCooldownSeconds(60);
+        setToast({
+          type: "success",
+          message: "Verification email sent successfully. Please check your inbox.",
+        });
       } else {
         setToast({
           type: "error",
@@ -90,47 +90,47 @@ const ResendVerificationForm = ({ initialEmail = "", onPreviewReady }) => {
     <>
       <div className="p-6 bg-slate-50 rounded-2xl border border-slate-100">
         <div className="flex items-center gap-4 text-slate-600 mb-4 text-sm font-medium">
-          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+          <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold">
             @
           </div>
           Didn't receive the email?
         </div>
-        {needsEmailInput ? (
-          <p className="text-slate-500 text-sm mb-4">
-            Enter your email and we'll resend the verification link.
-          </p>
+
+        {isEmailValid ? (
+          <>
+            <p className="text-slate-500 text-sm mb-4">
+              We'll resend the verification link to{" "}
+              <span className="font-semibold text-slate-800">{email}</span>.
+            </p>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <button
+                type="submit"
+                disabled={loading || isCoolingDown}
+                className={`w-full py-2.5 px-3 text-sm rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors ${
+                  loading || isCoolingDown ? "opacity-70 cursor-not-allowed" : ""
+                }`}
+              >
+                {loading
+                  ? "Sending..."
+                  : isCoolingDown
+                    ? `Resend available in ${cooldownSeconds}s`
+                    : "Resend Verification Link"}
+              </button>
+            </form>
+          </>
         ) : (
-          <p className="text-slate-500 text-sm mb-4">
-            We'll resend the verification link to{" "}
-            <span className="font-semibold">{email}</span>.
-          </p>
+          <div className="space-y-3">
+            <p className="text-slate-500 text-sm">
+              No registered email found in your current session. Please sign in to verify your email.
+            </p>
+            <Link
+              to="/login"
+              className="block w-full text-center py-2 px-3 text-sm rounded-lg bg-slate-800 text-white font-semibold hover:bg-slate-700 transition-colors"
+            >
+              Go to Login
+            </Link>
+          </div>
         )}
-        <form onSubmit={handleSubmit} className="space-y-3">
-          {needsEmailInput &&
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your-email@example.com"
-              disabled={loading || isCoolingDown}
-              className="w-full px-3 py-2 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-100"
-              required
-            />
-          }
-          <button
-            type="submit"
-            disabled={loading || isCoolingDown}
-            className={`w-full py-2 px-3 text-sm rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors ${
-              loading || isCoolingDown ? "opacity-70 cursor-not-allowed" : ""
-            }`}
-          >
-            {loading
-              ? "Sending..."
-              : isCoolingDown
-                ? `Try again in ${cooldownSeconds}s`
-                : "Resend Verification Link"}
-          </button>
-        </form>
       </div>
 
       {toast && <Toast message={toast.message} type={toast.type} />}

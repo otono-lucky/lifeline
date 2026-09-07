@@ -71,7 +71,12 @@ export const ForgotPasswordSchema = z
 export const ResetPasswordSchema = z
   .object({
     token: z.string().min(1).openapi({ example: "reset_token_hex" }),
-    newPassword: z.string().min(8).openapi({ example: "NewSecurePassword456!" }),
+    password: z.string().min(8).openapi({ example: "NewSecurePassword456!" }),
+    confirmPassword: z.string().min(8).openapi({ example: "NewSecurePassword456!" }),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: "Passwords do not match",
+    path: ["confirmPassword"],
   })
   .openapi({
     description: "Reset Password Confirmation Payload",

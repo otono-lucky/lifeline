@@ -237,9 +237,9 @@ export const addSocial = async (req: Request, res: Response) => {
       handleOrUrl,
     });
 
-    res.status(201).json(successResponse("Social media handle added", { social: created }));
+    res.status(200).json(successResponse("Social media handle saved", { social: created }));
   } catch (error: any) {
-    res.status(400).json(errorResponse(error.message || "Failed to add social handle"));
+    res.status(400).json(errorResponse(error.message || "Failed to save social handle"));
   }
 };
 

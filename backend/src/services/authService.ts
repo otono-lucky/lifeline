@@ -64,10 +64,20 @@ export const registerLead = async (input: {
       lastName: true,
       role: true,
       status: true,
-      isEmailVerified: true,
+      isEmailVerified: input.authProvider ? true : false,
       createdAt: true,
     },
   });
+
+  // Automatically dispatch verification email for non-social registrations
+  if (!input.authProvider) {
+    try {
+      await requestEmailVerification(account);
+      console.log(`[authService] Verification email dispatched for lead: ${account.email}`);
+    } catch (emailErr) {
+      console.warn(`[authService] Could not send initial verification email to ${account.email}:`, emailErr);
+    }
+  }
 
   return account;
 };
@@ -404,6 +414,35 @@ export const requestPasswordReset = async (email: string) => {
           resetUrl,
         }
       : null,
+  };
+};
+
+/**
+ * Validate password reset token before displaying the reset page
+ */
+export const validateResetPasswordToken = async (token: string) => {
+  const account = await prisma.account.findUnique({
+    where: { passwordResetToken: token },
+    select: {
+      id: true,
+      email: true,
+      firstName: true,
+      passwordResetExpiry: true,
+    },
+  });
+
+  if (!account) {
+    throw new Error("Invalid or already used password reset link");
+  }
+
+  if (account.passwordResetExpiry && new Date() > account.passwordResetExpiry) {
+    throw new Error("This password reset link has expired. Please request a new one.");
+  }
+
+  return {
+    valid: true,
+    email: account.email,
+    firstName: account.firstName,
   };
 };
 

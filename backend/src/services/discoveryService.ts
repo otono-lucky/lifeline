@@ -168,6 +168,7 @@ export const getDiscoveryFeed = async (
 
       return {
         userId: candidate.id,
+        accountId: candidate.accountId,   // include for client-side profile navigation
         firstName: candidate.account.firstName,
         lastNameInitial: candidate.account.lastName
           ? candidate.account.lastName.charAt(0) + "."
@@ -191,7 +192,8 @@ export const getDiscoveryFeed = async (
             }
           : null,
         branchName: candidate.branchName,
-        photos: candidate.photos.map((p) => p.url),
+        // Normalize photos to { photoUrl, order } matching client UserPhoto type
+        photos: candidate.photos.map((p) => ({ photoUrl: p.url, order: p.order })),
         videoIntroUrl: candidate.videoIntroUrl,
         score: totalScore,
       };

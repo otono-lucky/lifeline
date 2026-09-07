@@ -67,6 +67,14 @@ export const communicationService = {
     );
     return response.data;
   },
+
+  // Get all calendar events for the authenticated user's matches
+  getEvents: async () => {
+    const response = await apiClient.get<ApiResponse<CalendarEvent[]>>(
+      "/communications/events",
+    );
+    return response.data;
+  },
 };
 
 export default communicationService;

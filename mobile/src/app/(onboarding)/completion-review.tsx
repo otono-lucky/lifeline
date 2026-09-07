@@ -10,7 +10,6 @@ import Button from "../../components/ui/Button";
 import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
 import { useAuth } from "../../context/AuthContext";
-import userService from "../../services/userService";
 import { CheckCircle2, ShieldCheck, Sparkles, User, MapPin, Church, DollarSign, Camera } from "lucide-react-native";
 
 export default function CompletionReviewScreen() {
@@ -54,20 +53,10 @@ export default function CompletionReviewScreen() {
   const handleSubmitForVetting = async () => {
     setIsSubmitting(true);
     try {
-      if (user?.accountId) {
-        // Backend recalculates completeness percentage and moves status to PENDING_VETTING
-        await userService.updateProfile(user.accountId, {
-          profileCompletionPercentage: 100,
-          vettingStatus: "PENDING_VETTING",
-        } as any);
-
-        updateLocalUser({
-          profileCompletionPercentage: 100,
-          vettingStatus: "PENDING_VETTING",
-        });
-
-        await refreshUser();
-      }
+      // The backend already auto-promotes to PENDING_VETTING when profileCompletionPercentage
+      // hits 100% on any updateUser call. We just need to refresh the local user state
+      // so the authStore picks up the new vettingStatus and routes correctly.
+      await refreshUser();
 
       router.replace("/(vetting)/pending" as any);
     } catch (err: any) {

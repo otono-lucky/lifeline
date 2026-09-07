@@ -53,11 +53,19 @@ apiClient.interceptors.response.use(
       console.warn("[apiClient] Unauthorized 401 - clearing local token");
       await storage.removeToken();
     }
+
+    // IMPORTANT: Re-throw the ORIGINAL Axios error so callers can inspect
+    // error.response.status and error.response.data (e.g. 403 unverified email).
+    // Attach a friendly message string but do NOT wrap in a plain `new Error()`
+    // which would strip the `.response` property entirely.
     const message =
       error.response?.data?.message ||
       error.message ||
       "Network request failed. Please check your connection.";
-    return Promise.reject(new Error(message));
+
+    // Mutate the original error's message in-place, then re-throw it intact
+    error.message = message;
+    return Promise.reject(error);
   },
 );
 

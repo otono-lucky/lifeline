@@ -42,11 +42,18 @@ export default function ChatConversationScreen() {
     queryFn: async () => {
       if (!conversationId) return [];
       const response = await communicationService.getMessages(conversationId);
-      return response.data || [];
+      return (response.data as Message[]) || [];
     },
     enabled: Boolean(conversationId),
     refetchInterval: 3000, // 3s polling for real-time messaging
   });
+
+  // Derive matchId from TanStack conversations cache (populated by messages tab).
+  // Avoids an extra network request just to get matchId for the event scheduler.
+  const conversations = queryClient.getQueryData<any[]>(["conversations"]) || [];
+  const matchId =
+    conversations.find((c) => c.id === conversationId || c.conversationId === conversationId)
+      ?.matchId ?? conversationId;
 
   // 2. Send Message Mutation
   const sendMutation = useMutation({
@@ -83,7 +90,7 @@ export default function ChatConversationScreen() {
       rightAction={
         <TouchableOpacity
           onPress={() =>
-            router.push(`/(app)/modal/event-scheduler?matchId=${conversationId}` as any)
+            router.push(`/(app)/modal/event-scheduler?matchId=${matchId}` as any)
           }
           className="flex-row items-center rounded-xl bg-blue-50 px-3 py-1.5 border border-blue-200"
         >
@@ -133,7 +140,11 @@ export default function ChatConversationScreen() {
               </View>
             ) : (
               messages.map((msg: Message) => {
-                const isMe = msg.senderId === user?.accountId || msg.senderId === user?.id;
+                // Use backend pre-computed sender.isMe (avoids accountId vs userId ambiguity)
+                // Fallback: compare senderId (Account.id) to user.accountId
+                const isMe =
+                  msg.sender?.isMe ??
+                  msg.senderId === user?.accountId;
 
                 return (
                   <View
@@ -155,7 +166,7 @@ export default function ChatConversationScreen() {
                     >
                       {!isMe && (
                         <Text className="text-[11px] font-bold text-slate-500 mb-1">
-                          {msg.sender?.firstName || "Counselor"}
+                          {msg.sender?.firstName || msg.sender?.name || "Counselor"}
                         </Text>
                       )}
                       <Text

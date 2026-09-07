@@ -34,8 +34,12 @@ export const sendMatchRequest = async (
     throw new Error("You cannot send a match request to yourself");
   }
 
-  const receiver = await prisma.user.findUnique({
-    where: { id: receiverUserId },
+  const receiver = await prisma.user.findFirst({
+    where: {
+      // Accept either User.id (from discovery feed / match participants)
+      // or Account.id (from candidate profile screen route param)
+      OR: [{ id: receiverUserId }, { accountId: receiverUserId }],
+    },
     include: {
       account: { select: { status: true, firstName: true } },
     },
@@ -198,7 +202,8 @@ export const getReceivedMatchRequests = async (accountId: string) => {
       interests: r.sender.interests,
       residenceState: r.sender.residenceState,
       residenceCity: r.sender.residenceCity,
-      photos: r.sender.photos.map((p) => p.url),
+      // Normalize to { photoUrl, order } matching client UserPhoto type
+      photos: r.sender.photos.map((p, idx) => ({ photoUrl: p.url, order: idx + 1 })),
       videoIntroUrl: r.sender.videoIntroUrl,
       church: r.sender.church?.officialName || null,
     },
