@@ -3,7 +3,7 @@
 
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, Alert } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import ScreenWrapper from "../../components/layout/ScreenWrapper";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Input from "../../components/ui/Input";
@@ -12,6 +12,7 @@ import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
 import userService from "../../services/userService";
 import { useAuth } from "../../context/AuthContext";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import { SalaryRange } from "../../types";
 import { Briefcase, ShieldCheck, DollarSign, Calendar } from "lucide-react-native";
 
@@ -40,18 +41,29 @@ const SALARY_OPTIONS: Array<{ label: string; value: SalaryRange; description: st
 
 export default function CareerFinancialScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const isFromReview = from === "review";
   const { user, updateLocalUser } = useAuth();
+  const { profile, invalidateProfile } = useUserProfile();
 
-  const [occupation, setOccupation] = useState(user?.occupation || "");
+  const current = profile || user;
+
+  const [occupation, setOccupation] = useState(current?.occupation || "");
   const [salaryRange, setSalaryRange] = useState<SalaryRange>(
-    user?.salaryRange || "RANGE_100K_500K",
+    current?.salaryRange || "RANGE_100K_500K",
   );
   const [dateOfBirth, setDateOfBirth] = useState(
-    user?.dateOfBirth ? user.dateOfBirth.split("T")[0] : "1995-06-15",
+    current?.dateOfBirth ? current.dateOfBirth.split("T")[0] : "1995-06-15",
   );
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  const currentDob = current?.dateOfBirth ? current.dateOfBirth.split("T")[0] : "";
+  const isDirty =
+    occupation.trim() !== (current?.occupation || "").trim() ||
+    salaryRange !== (current?.salaryRange || "RANGE_100K_500K") ||
+    dateOfBirth !== (currentDob || "1995-06-15");
 
   const validate = () => {
     const newErrors: Record<string, string> = {};
@@ -64,6 +76,16 @@ export default function CareerFinancialScreen() {
 
   const handleContinue = async () => {
     if (!validate()) return;
+
+    // Bypass network call if untouched
+    if (!isDirty) {
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/social-identity" as any);
+      }
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -79,8 +101,13 @@ export default function CareerFinancialScreen() {
           salaryRange,
           dateOfBirth,
         });
+        invalidateProfile();
       }
-      router.push("/(onboarding)/social-identity" as any);
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/social-identity" as any);
+      }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to save career and financial details.");
     } finally {
@@ -93,6 +120,23 @@ export default function CareerFinancialScreen() {
       title="Career & Finances"
       subtitle="Step 3 of 7"
       showBack={true}
+      onBack={() => {
+        if (isFromReview) {
+          router.push("/(onboarding)/completion-review" as any);
+        } else {
+          router.push("/(onboarding)/location-profile" as any);
+        }
+      }}
+      rightAction={
+        !isFromReview ? (
+          <TouchableOpacity
+            onPress={() => router.push("/(onboarding)/completion-review" as any)}
+            className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200"
+          >
+            <Text className="text-xs font-bold text-blue-600">Review</Text>
+          </TouchableOpacity>
+        ) : undefined
+      }
     >
       <ProgressBar currentStep={3} totalSteps={7} label="Step 3: Finances" />
 
@@ -193,7 +237,13 @@ export default function CareerFinancialScreen() {
       </View>
 
       <Button
-        title="Continue to Identity Verification"
+        title={
+          isFromReview
+            ? isDirty
+              ? "Save & Return to Review"
+              : "Return to Review"
+            : "Continue to Identity Verification"
+        }
         isLoading={isSaving}
         onPress={handleContinue}
         className="mb-8"

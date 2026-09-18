@@ -99,3 +99,22 @@ export const useCreateManualMatchMutation = (options = {}) => {
     ...restOptions,
   });
 };
+
+export const useEndMatchMutation = (options = {}) => {
+  const queryClient = useQueryClient();
+  const { onSuccess, ...restOptions } = options;
+
+  return useMutation({
+    mutationFn: ({ matchId, reason }) => matchingService.endMatch(matchId, reason),
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.matching.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.users.all });
+      queryClient.invalidateQueries({ queryKey: ["counselor"] });
+      if (onSuccess) {
+        onSuccess(data, variables, context);
+      }
+    },
+    ...restOptions,
+  });
+};
+

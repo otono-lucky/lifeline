@@ -17,8 +17,10 @@ export const reviewUserVetting = async (
     throw new Error("Counselor profile not found");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { accountId: userAccountId },
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [{ accountId: userAccountId }, { id: userAccountId }],
+    },
     include: {
       photos: true,
       socialMediaHandles: true,

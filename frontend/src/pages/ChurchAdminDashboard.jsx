@@ -192,30 +192,74 @@ const ChurchAdminDashboard = () => {
     </nav>
   );
 
+  const renderVettingStatus = (status) => {
+    switch (status) {
+      case "VETTED_ACTIVE":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
+            Vetted / Active
+          </span>
+        );
+      case "PENDING_VETTING":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+            Pending Vetting
+          </span>
+        );
+      case "DEBRIEF_REQUIRED":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+            Debrief Required
+          </span>
+        );
+      case "REJECTED":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 border border-red-200">
+            Rejected
+          </span>
+        );
+      case "HARD_BLOCKED":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-900 text-white">
+            Blocked
+          </span>
+        );
+      case "DRAFT":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+            Draft
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
+            {status || "Unknown"}
+          </span>
+        );
+    }
+  };
+
   const memberColumns = [
-    // {
-    //   key: "accountId",
-    //   label: "ID",
-    //   render: (accountId) => accountId?.substring(0, 8),
-    // },
     {
       key: "profilePictureUrl",
       label: "Image",
-      render: (_, row) =>
-        row.profilePictureUrl ? (
+      render: (_, row) => {
+        const imgUrl = row.photoUrl || row.profilePictureUrl;
+        return imgUrl ? (
           <img
-            src={row.profilePictureUrl}
+            src={imgUrl}
             alt=""
-            className="w-8 h-8 rounded-full"
+            className="w-8 h-8 rounded-full object-cover"
           />
         ) : (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500">
+          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-bold">
             {row.firstName?.[0]}
             {row.lastName?.[0]}
           </div>
-        ),
+        );
+      },
     },
-    { key: "firstName", label: "Name" },
+    { key: "firstName", label: "Name", render: (_, row) => `${row.firstName} ${row.lastName}` },
     { key: "email", label: "Email" },
     {
       key: "gender",
@@ -227,7 +271,11 @@ const ChurchAdminDashboard = () => {
       label: "Age",
       render: (_, row) => (row.age ? row.age : "N/A"),
     },
-    { key: "verificationStatus", label: "Status" },
+    {
+      key: "vettingStatus",
+      label: "Status",
+      render: (status, row) => renderVettingStatus(status || row.verificationStatus),
+    },
     {
       key: "assignedCounselor",
       label: "Assigned To",
@@ -236,29 +284,26 @@ const ChurchAdminDashboard = () => {
   ];
   
   const recentMemberColumns = [
-    // {
-    //   key: "accountId",
-    //   label: "ID",
-    //   render: (accountId) => accountId?.substring(0, 8),
-    // },
     {
       key: "profilePictureUrl",
       label: "Image",
-      render: (_, row) =>
-        row.profilePictureUrl ? (
+      render: (_, row) => {
+        const imgUrl = row.photoUrl || row.profilePictureUrl;
+        return imgUrl ? (
           <img
-            src={row.profilePictureUrl}
+            src={imgUrl}
             alt=""
-            className="w-8 h-8 rounded-full"
+            className="w-8 h-8 rounded-full object-cover"
           />
         ) : (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500">
+          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-bold">
             {row.firstName?.[0]}
             {row.lastName?.[0]}
           </div>
-        ),
+        );
+      },
     },
-    { key: "firstName", label: "Name" },
+    { key: "firstName", label: "Name", render: (_, row) => `${row.firstName} ${row.lastName}` },
     { key: "email", label: "Email" },
     {
       key: "gender",
@@ -270,11 +315,19 @@ const ChurchAdminDashboard = () => {
       label: "Age",
       render: (_, row) => (row.age ? row.age : "N/A"),
     },
-    { key: "verificationStatus", label: "Status" },
+    {
+      key: "vettingStatus",
+      label: "Status",
+      render: (status, row) => renderVettingStatus(status || row.verificationStatus),
+    },
     {
       key: "assignedCounselor",
       label: "Assigned To",
-      render: (_, row) => row.assignedCounselor || "Unassigned",
+      render: (_, row) =>
+        row.assignedCounselor?.name ||
+        (row.assignedCounselor?.account
+          ? `${row.assignedCounselor.account.firstName} ${row.assignedCounselor.account.lastName}`
+          : "Unassigned"),
     },
   ];
 
@@ -373,8 +426,12 @@ const ChurchAdminDashboard = () => {
                 color="yellow"
               />
               <StatCard
-                label="Unverified"
-                value={dashboard.stats?.unverifiedMembers || 0}
+                label="Draft / Incomplete"
+                value={
+                  dashboard.stats?.draftMembers ??
+                  dashboard.stats?.unverifiedMembers ??
+                  0
+                }
                 icon={<CircleHelp className="w-8 h-8" />}
                 color="yellow"
               />

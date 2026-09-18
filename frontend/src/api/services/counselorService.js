@@ -21,13 +21,35 @@ export const counselorService = {
     return response.data;
   },
 
-  // Verify/reject user
-  verifyUser: async (userAccountId, status, notes = "") => {
+  // Review user vetting (APPROVE, REJECT, HARD_BLOCK)
+  verifyUser: async (userAccountId, decision, notes = "", reason = "") => {
+    // Normalize status string if caller still passes legacy "verified"/"rejected"
+    let normalizedDecision = decision;
+    if (decision === "verified") normalizedDecision = "APPROVE";
+    if (decision === "rejected") normalizedDecision = "REJECT";
+
     const response = await apiClient.post(
-      `/counselor/verify-user/${userAccountId}`,
+      `/vetting/users/${userAccountId}/review`,
       {
-        status,
+        decision: normalizedDecision,
+        notes: notes || undefined,
+        reason: reason || notes || undefined,
+      },
+    );
+    return response.data;
+  },
+
+  // Reset user after exit debrief
+  resetUserAfterDebrief: async (
+    userAccountId,
+    { notes, readinessScore = 10, matchId } = {},
+  ) => {
+    const response = await apiClient.post(
+      `/vetting/users/${userAccountId}/debrief-reset`,
+      {
         notes,
+        readinessScore,
+        matchId: matchId || undefined,
       },
     );
     return response.data;

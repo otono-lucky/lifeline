@@ -20,28 +20,29 @@ export const userService = {
   },
 
   getSocialMedia: async (accountId) => {
-    const response = await apiClient.get(`/users/${accountId}/social-media`);
+    const response = await apiClient.get(`/users/${accountId}/socials`);
     return response.data;
   },
 
   createSocialMedia: async (accountId, payload) => {
-    const response = await apiClient.post(`/users/${accountId}/social-media`, payload);
+    const response = await apiClient.post(`/users/${accountId}/socials`, payload);
     return response.data;
   },
 
   deleteSocialMedia: async (accountId, socialId) => {
     const response = await apiClient.delete(
-      `/users/${accountId}/social-media/${socialId}`,
+      `/users/${accountId}/socials/${socialId}`,
     );
     return response.data;
   },
 
-  uploadProfileImage: async (accountId, file) => {
+  uploadProfileImage: async (accountId, file, order = 1) => {
     const formData = new FormData();
     formData.append("image", file);
+    formData.append("order", String(order));
 
     const response = await apiClient.post(
-      `/users/${accountId}/profile-image`,
+      `/users/${accountId}/photos`,
       formData,
       {
         headers: {

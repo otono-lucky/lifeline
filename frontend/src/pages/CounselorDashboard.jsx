@@ -17,16 +17,65 @@ import {
   RefreshCcw,
   Users,
   XCircle,
+  HeartCrack,
 } from "lucide-react";
 import {
   useCounselorAssignedUsersQuery,
   useCounselorDashboardQuery,
   useVerifyCounselorUserMutation,
+  useDebriefResetMutation,
 } from "../api/queries/counselor";
 import {
   useCreateManualMatchMutation,
   useMatchesQuery,
 } from "../api/queries/matching";
+
+const renderVettingStatusBadge = (status) => {
+  switch (status) {
+    case "VETTED_ACTIVE":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
+          Vetted / Active
+        </span>
+      );
+    case "PENDING_VETTING":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+          Pending Vetting
+        </span>
+      );
+    case "DEBRIEF_REQUIRED":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+          Debrief Required
+        </span>
+      );
+    case "REJECTED":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 border border-red-200">
+          Rejected
+        </span>
+      );
+    case "HARD_BLOCKED":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-900 text-white">
+          Blocked
+        </span>
+      );
+    case "DRAFT":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+          Draft
+        </span>
+      );
+    default:
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
+          {status || "Unknown"}
+        </span>
+      );
+  }
+};
 
 const CounselorDashboard = () => {
   const { user } = useAuth();
@@ -36,12 +85,21 @@ const CounselorDashboard = () => {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [toast, setToast] = useState(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
+  const [showDebriefModal, setShowDebriefModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showCreateMatch, setShowCreateMatch] = useState(false);
+
   const [verifyForm, setVerifyForm] = useState({
-    status: "verified",
+    decision: "APPROVE",
     notes: "",
+    reason: "",
   });
+
+  const [debriefForm, setDebriefForm] = useState({
+    notes: "",
+    readinessScore: 10,
+  });
+
   const [matchForm, setMatchForm] = useState({
     primaryAccountId: "",
     counterpartAccountId: "",
@@ -80,6 +138,7 @@ const CounselorDashboard = () => {
   );
 
   const verifyUserMutation = useVerifyCounselorUserMutation();
+  const debriefResetMutation = useDebriefResetMutation();
   const createMatchMutation = useCreateManualMatchMutation();
 
   const dashboard = dashboardQuery.data?.success
@@ -99,7 +158,8 @@ const CounselorDashboard = () => {
   const usersLoading =
     assignedUsersQuery.isLoading || assignedUsersQuery.isFetching;
   const matchesLoading = matchesQuery.isLoading || matchesQuery.isFetching;
-  const mutationLoading = verifyUserMutation.isPending;
+  const mutationLoading =
+    verifyUserMutation.isPending || debriefResetMutation.isPending;
 
   const handleVerifyUser = async (e) => {
     e.preventDefault();
@@ -109,24 +169,76 @@ const CounselorDashboard = () => {
       return;
     }
 
+    if (
+      (verifyForm.decision === "REJECT" || verifyForm.decision === "HARD_BLOCK") &&
+      !verifyForm.notes &&
+      !verifyForm.reason
+    ) {
+      setToast({
+        type: "error",
+        message: "A reason or notes must be provided when rejecting or blocking",
+      });
+      return;
+    }
+
     try {
       const response = await verifyUserMutation.mutateAsync({
         userAccountId: selectedUser.accountId,
-        status: verifyForm.status,
+        decision: verifyForm.decision,
         notes: verifyForm.notes,
+        reason: verifyForm.reason || verifyForm.notes,
         viewedCounselorAccountId,
       });
 
       if (response.success) {
         setToast({
           type: "success",
-          message: `User ${verifyForm.status} successfully!`,
+          message: `User vetting ${verifyForm.decision.toLowerCase()}d successfully!`,
         });
-        setVerifyForm({ status: "verified", notes: "" });
+        setVerifyForm({ decision: "APPROVE", notes: "", reason: "" });
         setShowVerifyModal(false);
       }
-    } catch {
-      setToast({ type: "error", message: "Failed to verify user" });
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error?.response?.data?.message || error?.message || "Failed to process vetting review",
+      });
+    }
+  };
+
+  const handleDebriefReset = async (e) => {
+    e.preventDefault();
+
+    if (!selectedUser?.accountId) {
+      setToast({ type: "error", message: "Missing user accountId" });
+      return;
+    }
+
+    if (!debriefForm.notes) {
+      setToast({ type: "error", message: "Debrief reflection notes are required" });
+      return;
+    }
+
+    try {
+      const response = await debriefResetMutation.mutateAsync({
+        userAccountId: selectedUser.accountId,
+        notes: debriefForm.notes,
+        readinessScore: Number(debriefForm.readinessScore),
+      });
+
+      if (response.success) {
+        setToast({
+          type: "success",
+          message: "User exit debrief completed! Restored to active discovery.",
+        });
+        setDebriefForm({ notes: "", readinessScore: 10 });
+        setShowDebriefModal(false);
+      }
+    } catch (error) {
+      setToast({
+        type: "error",
+        message: error?.response?.data?.message || error?.message || "Failed to complete debrief reset",
+      });
     }
   };
 
@@ -182,27 +294,24 @@ const CounselorDashboard = () => {
   );
 
   const userColumns = [
-    // {
-    //   key: "accountId",
-    //   label: "ID",
-    //   render: (accountId) => accountId?.substring(0, 8),
-    // },
     {
       key: "profilePictureUrl",
       label: "Image",
-      render: (_, row) =>
-        row.profilePictureUrl ? (
+      render: (_, row) => {
+        const imgUrl = row.photoUrl || row.profilePictureUrl;
+        return imgUrl ? (
           <img
-            src={row.profilePictureUrl}
+            src={imgUrl}
             alt=""
-            className="w-8 h-8 rounded-full"
+            className="w-8 h-8 rounded-full object-cover"
           />
         ) : (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500">
+          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-bold">
             {row.firstName?.[0]}
             {row.lastName?.[0]}
           </div>
-        ),
+        );
+      },
     },
     {
       key: "firstName",
@@ -211,17 +320,21 @@ const CounselorDashboard = () => {
     },
     { key: "email", label: "Email" },
     { key: "gender", label: "Gender" },
-    
     {
       key: "age",
       label: "Age",
       render: (_, row) => (row.age ? row.age : "N/A"),
-    },    
-    { key: "verificationStatus", label: "Status" },
+    },
+    {
+      key: "vettingStatus",
+      label: "Status",
+      render: (status, row) =>
+        renderVettingStatusBadge(status || row.verificationStatus),
+    },
     {
       key: "assignedAt",
       label: "Assigned",
-      render: (date) => new Date(date).toLocaleDateString(),
+      render: (date) => (date ? new Date(date).toLocaleDateString() : "N/A"),
     },
   ];
 
@@ -255,7 +368,7 @@ const CounselorDashboard = () => {
               : "Counselor Dashboard"}
           </h1>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-7 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-6">
             <StatCard
               label="Total Assigned"
               value={dashboard?.stats?.totalAssigned || 0}
@@ -263,20 +376,20 @@ const CounselorDashboard = () => {
               color="blue"
             />
             <StatCard
-              label="Pending"
-              value={dashboard?.stats?.pending || 0}
+              label="Pending Vetting"
+              value={dashboard?.stats?.pendingVetting || 0}
               icon={<Clock3 className="w-8 h-8" />}
               color="yellow"
             />
             <StatCard
-              label="In Progress"
-              value={dashboard?.stats?.inProgress || 0}
-              icon={<RefreshCcw className="w-8 h-8" />}
-              color="blue"
+              label="Debrief Required"
+              value={dashboard?.stats?.debriefRequired || 0}
+              icon={<HeartCrack className="w-8 h-8" />}
+              color="purple"
             />
             <StatCard
-              label="Verified"
-              value={dashboard?.stats?.verified || 0}
+              label="Verified Active"
+              value={dashboard?.stats?.verifiedActive || 0}
               icon={<CircleCheckBig className="w-8 h-8" />}
               color="green"
             />
@@ -319,39 +432,46 @@ const CounselorDashboard = () => {
               columns={userColumns}
               data={assignedUsers}
               loading={usersLoading}
-              actions={(row) => (
-                <ActionMenu
-                  items={[
-                    {
-                      label: "View Details",
-                      onClick: () =>
-                        navigate(`/dashboard/user/${row.accountId}`),
+              actions={(row) => {
+                const items = [
+                  {
+                    label: "View Details",
+                    onClick: () =>
+                      navigate(`/dashboard/user/${row.accountId}`),
+                  },
+                  {
+                    label: "Review Vetting",
+                    onClick: () => {
+                      setSelectedUser(row);
+                      setVerifyForm({
+                        decision: "APPROVE",
+                        notes: "",
+                        reason: "",
+                      });
+                      setShowVerifyModal(true);
                     },
-                    {
-                      label: "Verify",
-                      onClick: () => {
-                        setSelectedUser(row);
-                        setVerifyForm({ status: "verified", notes: "" });
-                        setShowVerifyModal(true);
-                      },
+                  },
+                ];
+
+                if (row.vettingStatus === "DEBRIEF_REQUIRED") {
+                  items.push({
+                    label: "Exit Debrief & Reset",
+                    onClick: () => {
+                      setSelectedUser(row);
+                      setDebriefForm({ notes: "", readinessScore: 10 });
+                      setShowDebriefModal(true);
                     },
-                    {
-                      label: "Reject",
-                      variant: "danger",
-                      onClick: () => {
-                        setSelectedUser(row);
-                        setVerifyForm({ status: "rejected", notes: "" });
-                        setShowVerifyModal(true);
-                      },
-                    },
-                    {
-                      label: "Create Match",
-                      onClick: () =>
-                        openMatchModal({ primaryAccountId: row.accountId }),
-                    },
-                  ]}
-                />
-              )}
+                  });
+                }
+
+                items.push({
+                  label: "Create Match",
+                  onClick: () =>
+                    openMatchModal({ primaryAccountId: row.accountId }),
+                });
+
+                return <ActionMenu items={items} />;
+              }}
             />
           </Card>
         </div>
@@ -383,10 +503,11 @@ const CounselorDashboard = () => {
         </div>
       )}
 
+      {/* Vetting Review Modal */}
       <Modal
         isOpen={showVerifyModal}
         onClose={() => setShowVerifyModal(false)}
-        title={`${verifyForm.status === "verified" ? "Verify" : "Reject"} User`}
+        title="Counselor Vetting Review"
         size="md"
         footer={
           <>
@@ -397,11 +518,21 @@ const CounselorDashboard = () => {
               Cancel
             </Button>
             <Button
-              variant={verifyForm.status === "verified" ? "success" : "danger"}
+              variant={
+                verifyForm.decision === "APPROVE"
+                  ? "success"
+                  : verifyForm.decision === "REJECT"
+                  ? "danger"
+                  : "danger"
+              }
               onClick={handleVerifyUser}
               disabled={mutationLoading}
             >
-              {verifyForm.status === "verified" ? "Verify" : "Reject"}
+              {verifyForm.decision === "APPROVE"
+                ? "Approve & Activate"
+                : verifyForm.decision === "REJECT"
+                ? "Reject Profile"
+                : "Hard Block"}
             </Button>
           </>
         }
@@ -413,40 +544,126 @@ const CounselorDashboard = () => {
                 {selectedUser.firstName} {selectedUser.lastName}
               </h3>
               <p className="text-sm text-gray-600">{selectedUser.email}</p>
-              <p className="text-sm text-gray-600 mt-2">
-                Status: {selectedUser.verificationStatus}
-              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-xs text-gray-500">Current Status:</span>
+                {renderVettingStatusBadge(selectedUser.vettingStatus)}
+              </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Decision
+                Vetting Decision
               </label>
               <select
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                value={verifyForm.status}
+                value={verifyForm.decision}
                 onChange={(e) =>
-                  setVerifyForm({ ...verifyForm, status: e.target.value })
+                  setVerifyForm({ ...verifyForm, decision: e.target.value })
                 }
               >
-                <option value="verified">Verify User</option>
-                <option value="rejected">Reject User</option>
+                <option value="APPROVE">Approve & Activate in Discovery</option>
+                <option value="REJECT">Reject Profile</option>
+                <option value="HARD_BLOCK">Hard Block (Permanent Ban)</option>
               </select>
             </div>
 
-            <textarea
-              placeholder="Notes (optional)"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-              value={verifyForm.notes}
-              onChange={(e) =>
-                setVerifyForm({ ...verifyForm, notes: e.target.value })
-              }
-              rows="3"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Pastoral Notes / Feedback
+              </label>
+              <textarea
+                placeholder="Enter interview notes, pastoral observations, or rejection rationale..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                value={verifyForm.notes}
+                onChange={(e) =>
+                  setVerifyForm({ ...verifyForm, notes: e.target.value })
+                }
+                rows="3"
+              />
+            </div>
           </form>
         )}
       </Modal>
 
+      {/* Exit Debrief Reset Modal */}
+      <Modal
+        isOpen={showDebriefModal}
+        onClose={() => setShowDebriefModal(false)}
+        title="Exit Debrief & Reset"
+        size="md"
+        footer={
+          <>
+            <Button
+              variant="secondary"
+              onClick={() => setShowDebriefModal(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleDebriefReset}
+              disabled={mutationLoading}
+            >
+              Clear for Discovery
+            </Button>
+          </>
+        }
+      >
+        {selectedUser && (
+          <form className="space-y-4">
+            <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
+              <h3 className="font-semibold text-purple-950">
+                {selectedUser.firstName} {selectedUser.lastName}
+              </h3>
+              <p className="text-xs text-purple-700 mt-1">
+                This member concluded a relationship and is currently locked in Exit Debrief.
+                Conducting a debrief and clearing them will reset their status to Vetted / Active
+                and restore their discovery feed.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Readiness Score (1–10)
+              </label>
+              <select
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                value={debriefForm.readinessScore}
+                onChange={(e) =>
+                  setDebriefForm({
+                    ...debriefForm,
+                    readinessScore: Number(e.target.value),
+                  })
+                }
+              >
+                {[10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((score) => (
+                  <option key={score} value={score}>
+                    {score} {score >= 8 ? "- Highly Ready" : score >= 5 ? "- Moderate" : "- Needs Pastoral Followup"}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Debrief Notes (Required)
+              </label>
+              <textarea
+                placeholder="Log pastoral reflection notes, closure feedback, and emotional readiness..."
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                value={debriefForm.notes}
+                onChange={(e) =>
+                  setDebriefForm({ ...debriefForm, notes: e.target.value })
+                }
+                rows="4"
+                required
+              />
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Create Match Modal */}
       <Modal
         isOpen={showCreateMatch}
         onClose={() => setShowCreateMatch(false)}

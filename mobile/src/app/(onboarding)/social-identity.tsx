@@ -2,8 +2,8 @@
 // Phase 4: Step 4 Social Identity Verification ("2-of-3" Logic Gate across LinkedIn, Instagram, Facebook)
 
 import React, { useState, useEffect } from "react";
-import { View, Text, Alert, ActivityIndicator } from "react-native";
-import { useRouter } from "expo-router";
+import { View, Text, Alert, ActivityIndicator, TouchableOpacity } from "react-native";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import ScreenWrapper from "../../components/layout/ScreenWrapper";
 import ProgressBar from "../../components/ui/ProgressBar";
 import Input from "../../components/ui/Input";
@@ -12,12 +12,16 @@ import Card from "../../components/ui/Card";
 import Badge from "../../components/ui/Badge";
 import userService from "../../services/userService";
 import { useAuth } from "../../context/AuthContext";
+import { useUserProfile } from "../../hooks/useUserProfile";
 import { SocialMediaHandle } from "../../types";
 import { Globe, Share2, Link2, ShieldCheck, CheckCircle2, AlertTriangle } from "lucide-react-native";
 
 export default function SocialIdentityScreen() {
   const router = useRouter();
+  const { from } = useLocalSearchParams<{ from?: string }>();
+  const isFromReview = from === "review";
   const { user } = useAuth();
+  const { invalidateProfile } = useUserProfile();
 
   const [linkedin, setLinkedin] = useState("");
   const [instagram, setInstagram] = useState("");
@@ -59,38 +63,52 @@ export default function SocialIdentityScreen() {
       return;
     }
 
+    // Synchronize socials idempotently
+    const syncPromises = [];
+    const platforms: Array<{ name: "LinkedIn" | "Instagram" | "Facebook"; value: string }> = [
+      { name: "LinkedIn", value: linkedin.trim() },
+      { name: "Instagram", value: instagram.trim() },
+      { name: "Facebook", value: facebook.trim() },
+    ];
+
+    if (user?.accountId) {
+      for (const p of platforms) {
+        const existing = existingSocials.find(
+          (s) => s.platform.toLowerCase() === p.name.toLowerCase(),
+        );
+        if (p.value) {
+          // Upsert handle if changed
+          if (!existing || existing.handleOrUrl !== p.value) {
+            syncPromises.push(userService.addSocial(user.accountId, p.name, p.value));
+          }
+        } else if (existing) {
+          // Handle was removed
+          syncPromises.push(userService.removeSocial(user.accountId, existing.id));
+        }
+      }
+    }
+
+    // Bypass network call if untouched
+    if (syncPromises.length === 0) {
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/media-upload" as any);
+      }
+      return;
+    }
+
     setIsSaving(true);
     setError("");
     try {
-      if (user?.accountId) {
-        // Synchronize socials idempotently
-        const syncPromises = [];
-        const platforms: Array<{ name: "LinkedIn" | "Instagram" | "Facebook"; value: string }> = [
-          { name: "LinkedIn", value: linkedin.trim() },
-          { name: "Instagram", value: instagram.trim() },
-          { name: "Facebook", value: facebook.trim() },
-        ];
+      await Promise.all(syncPromises);
+      invalidateProfile();
 
-        for (const p of platforms) {
-          const existing = existingSocials.find(
-            (s) => s.platform.toLowerCase() === p.name.toLowerCase(),
-          );
-          if (p.value) {
-            // Upsert handle
-            if (!existing || existing.handleOrUrl !== p.value) {
-              syncPromises.push(userService.addSocial(user.accountId, p.name, p.value));
-            }
-          } else if (existing) {
-            // Handle was removed
-            syncPromises.push(userService.removeSocial(user.accountId, existing.id));
-          }
-        }
-
-        if (syncPromises.length > 0) {
-          await Promise.all(syncPromises);
-        }
+      if (isFromReview) {
+        router.push("/(onboarding)/completion-review" as any);
+      } else {
+        router.push("/(onboarding)/media-upload" as any);
       }
-      router.push("/(onboarding)/media-upload" as any);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to save social profiles.");
     } finally {
@@ -103,6 +121,23 @@ export default function SocialIdentityScreen() {
       title="Identity Verification"
       subtitle="Step 4 of 7"
       showBack={true}
+      onBack={() => {
+        if (isFromReview) {
+          router.push("/(onboarding)/completion-review" as any);
+        } else {
+          router.push("/(onboarding)/career-financial" as any);
+        }
+      }}
+      rightAction={
+        !isFromReview ? (
+          <TouchableOpacity
+            onPress={() => router.push("/(onboarding)/completion-review" as any)}
+            className="px-2.5 py-1 rounded-full bg-blue-50 border border-blue-200"
+          >
+            <Text className="text-xs font-bold text-blue-600">Review</Text>
+          </TouchableOpacity>
+        ) : undefined
+      }
     >
       <ProgressBar currentStep={4} totalSteps={7} label="Step 4: Socials" />
 
@@ -201,7 +236,11 @@ export default function SocialIdentityScreen() {
           ) : null}
 
           <Button
-            title="Continue to Photos & Video"
+            title={
+              isFromReview
+                ? "Save & Return to Review"
+                : "Continue to Photos & Video"
+            }
             disabled={!isGateSatisfied}
             isLoading={isSaving}
             onPress={handleContinue}

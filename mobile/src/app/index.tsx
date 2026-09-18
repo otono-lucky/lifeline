@@ -8,7 +8,7 @@ import { useAuth } from "../context/AuthContext";
 
 export default function IndexDispatcher() {
   const router = useRouter();
-  const { isLoading, isAuthenticated, isProfileComplete, vettingStatus } = useAuth();
+  const { isLoading, isAuthenticated, isProfileComplete, vettingStatus, user } = useAuth();
 
   useEffect(() => {
     if (isLoading) return;
@@ -21,7 +21,21 @@ export default function IndexDispatcher() {
 
     // 2. Authenticated -> Check 100% Profile Completion Gate
     if (!isProfileComplete) {
-      router.replace("/(onboarding)/church-selection" as any);
+      if (!user?.churchId) {
+        router.replace("/(onboarding)/church-selection" as any);
+      } else if (!user?.residenceState || !user?.residenceAddress) {
+        router.replace("/(onboarding)/location-profile" as any);
+      } else if (!user?.occupation || !user?.dateOfBirth) {
+        router.replace("/(onboarding)/career-financial" as any);
+      } else if (!user?.socials || user.socials.length < 2) {
+        router.replace("/(onboarding)/social-identity" as any);
+      } else if (!user?.photos || user.photos.length < 3 || !user?.videoIntroUrl) {
+        router.replace("/(onboarding)/media-upload" as any);
+      } else if (!user?.matchPreference || !user?.interests || user.interests.length < 3) {
+        router.replace("/(onboarding)/preferences" as any);
+      } else {
+        router.replace("/(onboarding)/completion-review" as any);
+      }
       return;
     }
 
@@ -44,7 +58,7 @@ export default function IndexDispatcher() {
         router.replace("/(app)/(tabs)/discovery" as any);
         break;
     }
-  }, [isLoading, isAuthenticated, isProfileComplete, vettingStatus]);
+  }, [isLoading, isAuthenticated, isProfileComplete, vettingStatus, user]);
 
   return (
     <View className="flex-1 items-center justify-center bg-indigo-950 px-6">
