@@ -52,4 +52,12 @@ export const matchingService = {
     const response = await apiClient.post("/matches", payload);
     return response.data;
   },
+
+  endMatch: async (matchId, reason = "") => {
+    const response = await apiClient.post(`/matches/${matchId}/end`, {
+      reason: reason || undefined,
+    });
+    return response.data;
+  },
 };
+

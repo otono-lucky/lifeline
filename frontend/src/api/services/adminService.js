@@ -33,11 +33,19 @@ export const adminService = {
     return response.data;
   },
 
-  // Verify/unverify user
-  verifyUser: async (accountId, isVerified) => {
-    const response = await apiClient.patch(`/users/${accountId}/verification`, {
-      isVerified,
-    });
+  // Verify/reject user via vetting review
+  verifyUser: async (accountId, decision = "APPROVE", notes = "") => {
+    let normalizedDecision = decision;
+    if (decision === true || decision === "verified") normalizedDecision = "APPROVE";
+    if (decision === false || decision === "rejected") normalizedDecision = "REJECT";
+
+    const response = await apiClient.post(
+      `/vetting/users/${accountId}/review`,
+      {
+        decision: normalizedDecision,
+        notes: notes || undefined,
+      },
+    );
     return response.data;
   },
 

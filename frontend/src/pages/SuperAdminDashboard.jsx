@@ -245,7 +245,7 @@ const SuperAdminDashboard = () => {
     }
   };
 
-  const handleVerifyUser = async (accountId, isVerified) => {
+  const handleVerifyUser = async (accountId, decision = "APPROVE") => {
     if (!accountId) {
       setToast({ type: "error", message: "Missing user accountId" });
       return;
@@ -253,13 +253,16 @@ const SuperAdminDashboard = () => {
     try {
       const response = await verifyUserMutation.mutateAsync({
         accountId,
-        isVerified,
+        isVerified: decision,
       });
       if (response.success) {
-        setToast({ type: "success", message: "User updated successfully!" });
+        setToast({
+          type: "success",
+          message: `User vetting ${decision === "APPROVE" ? "approved" : "rejected"} successfully!`,
+        });
       }
     } catch {
-      setToast({ type: "error", message: "Failed to update user" });
+      setToast({ type: "error", message: "Failed to update user vetting status" });
     }
   };
 
@@ -334,6 +337,53 @@ const SuperAdminDashboard = () => {
     </nav>
   );
 
+  const renderVettingStatus = (status) => {
+    switch (status) {
+      case "VETTED_ACTIVE":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
+            Vetted / Active
+          </span>
+        );
+      case "PENDING_VETTING":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+            Pending Vetting
+          </span>
+        );
+      case "DEBRIEF_REQUIRED":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+            Debrief Required
+          </span>
+        );
+      case "REJECTED":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 border border-red-200">
+            Rejected
+          </span>
+        );
+      case "HARD_BLOCKED":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-900 text-white">
+            Blocked
+          </span>
+        );
+      case "DRAFT":
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+            Draft
+          </span>
+        );
+      default:
+        return (
+          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
+            {status || "Unknown"}
+          </span>
+        );
+    }
+  };
+
   const churchColumns = [
     { key: "officialName", label: "Name" },
     { key: "email", label: "Email" },
@@ -350,19 +400,21 @@ const SuperAdminDashboard = () => {
     {
       key: "profilePictureUrl",
       label: "Image",
-      render: (_, row) =>
-        row.profilePictureUrl ? (
+      render: (_, row) => {
+        const photo = row.photoUrl || row.profilePictureUrl;
+        return photo ? (
           <img
-            src={row.profilePictureUrl}
+            src={photo}
             alt=""
-            className="w-8 h-8 rounded-full"
+            className="w-8 h-8 rounded-full object-cover"
           />
         ) : (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500">
+          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-semibold">
             {row.firstName?.[0]}
             {row.lastName?.[0]}
           </div>
-        ),
+        );
+      },
     },
     {
       key: "firstName",
@@ -381,8 +433,12 @@ const SuperAdminDashboard = () => {
       render: (_, row) => (row.age ? row.age : "N/A"),
     },
     {
-      key: "verificationStatus",
-      label: "Verification Status",
+      key: "vettingStatus",
+      label: "Vetting Status",
+      render: (status, row) =>
+        renderVettingStatus(
+          status || (row.isVerified ? "VETTED_ACTIVE" : row.verificationStatus)
+        ),
     },
   ];
 
@@ -611,17 +667,25 @@ const SuperAdminDashboard = () => {
                     {
                       label: "View Details",
                       onClick: () =>
-                        navigate(`/dashboard/user/${row.accountId}`),
+                        navigate(`/dashboard/user/${row.accountId || row.id}`),
                     },
                     {
-                      label: row.isVerified ? "Unverify" : "Verify",
+                      label:
+                        row.vettingStatus === "VETTED_ACTIVE" || row.isVerified
+                          ? "Reject / Revoke"
+                          : "Approve Vetting",
                       onClick: () =>
-                        handleVerifyUser(row.accountId, !row.isVerified),
+                        handleVerifyUser(
+                          row.accountId || row.id,
+                          row.vettingStatus === "VETTED_ACTIVE" || row.isVerified
+                            ? "REJECT"
+                            : "APPROVE"
+                        ),
                     },
                     {
                       label: "Create Match",
                       onClick: () =>
-                        openMatchModal({ primaryAccountId: row.accountId }),
+                        openMatchModal({ primaryAccountId: row.accountId || row.id }),
                     },
                   ]}
                 />

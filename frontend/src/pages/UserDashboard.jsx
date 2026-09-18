@@ -64,6 +64,53 @@ const getInitials = (firstName, lastName) => {
   return value || "U";
 };
 
+const renderVettingStatus = (status) => {
+  switch (status) {
+    case "VETTED_ACTIVE":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800 border border-green-200">
+          Vetted / Active
+        </span>
+      );
+    case "PENDING_VETTING":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+          Pending Vetting
+        </span>
+      );
+    case "DEBRIEF_REQUIRED":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+          Debrief Required
+        </span>
+      );
+    case "REJECTED":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-red-100 text-red-800 border border-red-200">
+          Rejected
+        </span>
+      );
+    case "HARD_BLOCKED":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-900 text-white">
+          Blocked
+        </span>
+      );
+    case "DRAFT":
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700 border border-gray-200">
+          Draft
+        </span>
+      );
+    default:
+      return (
+        <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-700">
+          {status || "Unknown"}
+        </span>
+      );
+  }
+};
+
 const UserDashboard = () => {
   const { user } = useAuth();
   const { id } = useParams();
@@ -285,12 +332,28 @@ const UserDashboard = () => {
   };
 
   const sidebar = (
-    <div className="space-y-2">
-      <div className="px-4 py-2 bg-gray-50 rounded-lg">
-        <p className="text-xs text-gray-600">Verification</p>
-        <p className="font-semibold">
-          {profile?.verificationStatus || "pending"}
-        </p>
+    <div className="space-y-3">
+      <div className="px-4 py-3 bg-gray-50 rounded-lg border border-gray-200">
+        <p className="text-xs text-gray-500 mb-1 font-medium">Vetting Status</p>
+        <div className="mt-1">
+          {renderVettingStatus(profile?.vettingStatus || profile?.verificationStatus)}
+        </div>
+        {profile?.profileCompletionPercentage !== undefined && (
+          <div className="mt-3 pt-3 border-t border-gray-200">
+            <div className="flex justify-between text-xs text-gray-600 mb-1">
+              <span>Profile Completion</span>
+              <span className="font-semibold text-blue-600">
+                {profile.profileCompletionPercentage}%
+              </span>
+            </div>
+            <div className="w-full bg-gray-200 rounded-full h-1.5">
+              <div
+                className="bg-blue-600 h-1.5 rounded-full transition-all"
+                style={{ width: `${profile.profileCompletionPercentage}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -471,6 +534,18 @@ const UserDashboard = () => {
                     ? profile.interests.join(", ")
                     : profile.interests || "N/A"}
                 </p>
+                {profile.salaryRange && (
+                  <p>
+                    <strong className="block">Salary Tier:</strong>{" "}
+                    {profile.salaryRange}
+                  </p>
+                )}
+                {profile.verificationNotes && (
+                  <p className="md:col-span-2">
+                    <strong className="block">Pastoral / Vetting Notes:</strong>{" "}
+                    {profile.verificationNotes}
+                  </p>
+                )}
               </div>
             )}
 

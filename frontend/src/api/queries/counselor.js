@@ -25,8 +25,39 @@ export const useVerifyCounselorUserMutation = (options = {}) => {
   const { onSuccess, ...restOptions } = options;
 
   return useMutation({
-    mutationFn: ({ userAccountId, status, notes }) =>
-      counselorService.verifyUser(userAccountId, status, notes),
+    mutationFn: ({ userAccountId, decision, status, notes, reason }) =>
+      counselorService.verifyUser(userAccountId, decision || status, notes, reason),
+    onSuccess: (data, variables, context) => {
+      const scopedAccountId = variables?.viewedCounselorAccountId || "self";
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.counselor.dashboard(scopedAccountId),
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["counselor", "assigned-users", scopedAccountId],
+      });
+      queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.users.profile(variables?.userAccountId),
+      });
+      if (onSuccess) {
+        onSuccess(data, variables, context);
+      }
+    },
+    ...restOptions,
+  });
+};
+
+export const useDebriefResetMutation = (options = {}) => {
+  const queryClient = useQueryClient();
+  const { onSuccess, ...restOptions } = options;
+
+  return useMutation({
+    mutationFn: ({ userAccountId, notes, readinessScore, matchId }) =>
+      counselorService.resetUserAfterDebrief(userAccountId, {
+        notes,
+        readinessScore,
+        matchId,
+      }),
     onSuccess: (data, variables, context) => {
       const scopedAccountId = variables?.viewedCounselorAccountId || "self";
       queryClient.invalidateQueries({

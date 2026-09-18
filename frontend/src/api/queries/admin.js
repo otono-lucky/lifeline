@@ -82,8 +82,8 @@ export const useAdminVerifyUserMutation = (options = {}) => {
   const { onSuccess, ...restOptions } = options;
 
   return useMutation({
-    mutationFn: ({ accountId, isVerified }) =>
-      adminService.verifyUser(accountId, isVerified),
+    mutationFn: ({ accountId, decision, isVerified, notes }) =>
+      adminService.verifyUser(accountId, decision || isVerified, notes),
     onSuccess: (data, variables, context) => {
       queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
       queryClient.invalidateQueries({ queryKey: queryKeys.admin.overview() });

@@ -65,8 +65,10 @@ export const resetUserAfterDebrief = async (
     throw new Error("Counselor not found");
   }
 
-  const user = await prisma.user.findUnique({
-    where: { accountId: userAccountId },
+  const user = await prisma.user.findFirst({
+    where: {
+      OR: [{ accountId: userAccountId }, { id: userAccountId }],
+    },
     select: { id: true, vettingStatus: true },
   });
 

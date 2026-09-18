@@ -57,5 +57,13 @@ router.get(
   MatchingController.listAll,
 );
 
+// Admin/Counselor: create manual match
+router.post(
+  "/",
+  requireRole(["Counselor", "ChurchAdmin", "SuperAdmin"]),
+  MatchingController.create,
+);
+
 export default router;
+
 
