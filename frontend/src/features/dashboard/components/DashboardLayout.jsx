@@ -29,7 +29,7 @@ export const DashboardLayout = ({ children, sidebar = null }) => {
           <div
             className={`${
               showMobileMenu ? "block" : "hidden"
-            } md:block fixed md:static ibox-0 md:w-64 bg-white border-r border-gray-200 p-6 overflow-y-auto z-30`}
+            } md:block fixed md:static inset-y-0 md:w-64 bg-white border-r border-gray-200 p-6 overflow-y-auto z-30`}
           >
             <div className="mb-8">
               <h1 className="text-2xl font-bold text-blue-600">Lifeline</h1>

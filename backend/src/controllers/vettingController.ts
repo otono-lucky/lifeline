@@ -3,6 +3,8 @@ import {
   reviewAppealRequest,
   reviewUserVetting,
   submitAppealRequest,
+  getAppeals,
+  getAppealById,
 } from "../services/vettingService";
 import { resetUserAfterDebrief } from "../services/debriefService";
 
@@ -144,3 +146,42 @@ export const debriefReset = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const listAppeals = async (req: Request, res: Response) => {
+  try {
+    const status = req.query.status as string | undefined;
+    const appeals = await getAppeals(status);
+    return res.json({
+      success: true,
+      message: "Appeals retrieved successfully",
+      data: { appeals },
+      errors: null,
+    });
+  } catch (error: any) {
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to retrieve appeals",
+      errors: error.message,
+    });
+  }
+};
+
+export const getAppeal = async (req: Request, res: Response) => {
+  try {
+    const appealId = req.params.appealId as string;
+    const appeal = await getAppealById(appealId);
+    return res.json({
+      success: true,
+      message: "Appeal details retrieved successfully",
+      data: { appeal },
+      errors: null,
+    });
+  } catch (error: any) {
+    return res.status(error.message === "Appeal request not found" ? 404 : 500).json({
+      success: false,
+      message: error.message || "Failed to retrieve appeal details",
+      errors: error.message,
+    });
+  }
+};
+

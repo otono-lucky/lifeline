@@ -114,3 +114,34 @@ export const useAdminUpdateUserStatusMutation = (options = {}) => {
     ...restOptions,
   });
 };
+
+export const useAdminAppealsQuery = (params = {}, options = {}) =>
+  useQuery({
+    queryKey: ["admin", "appeals", params],
+    queryFn: () => adminService.getAppeals(params),
+    ...options,
+  });
+
+export const useAdminAppealQuery = (appealId, options = {}) =>
+  useQuery({
+    queryKey: ["admin", "appeals", appealId],
+    queryFn: () => adminService.getAppeal(appealId),
+    enabled: Boolean(appealId),
+    ...options,
+  });
+
+export const useAdminReviewAppealMutation = (options = {}) => {
+  const queryClient = useQueryClient();
+  const { onSuccess, ...restOptions } = options;
+
+  return useMutation({
+    mutationFn: ({ appealId, status, notes }) =>
+      adminService.reviewAppeal(appealId, status, notes),
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries({ queryKey: ["admin", "appeals"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin.overview() });
+      if (onSuccess) onSuccess(data, variables, context);
+    },
+    ...restOptions,
+  });
+};

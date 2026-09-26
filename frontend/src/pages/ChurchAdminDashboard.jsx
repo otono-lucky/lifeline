@@ -9,7 +9,7 @@ import {
   Toast,
   ActionMenu,
 } from "../components";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import CreateCounsellorModal from "../features/dashboard/components/CreateCounsellorModal";
 import {
@@ -31,17 +31,27 @@ import {
   useMatchesQuery,
 } from "../api/queries/matching";
 
-const ChurchAdminDashboard = () => {
+const ChurchAdminDashboard = ({ bare = false, defaultTab = null }) => {
   const { user } = useAuth();
   const { id: viewedChurchAdminAccountId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [toast, setToast] = useState(null);
   const [showCreateCounselor, setShowCreateCounselor] = useState(false);
   const [showAssignUser, setShowAssignUser] = useState(false);
   const [showCreateMatch, setShowCreateMatch] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
-  const activeTab = searchParams.get("tab") || "overview";
+
+  const getTabFromPath = () => {
+    if (defaultTab) return defaultTab;
+    const path = location.pathname;
+    if (path.includes("/church/members")) return "members";
+    if (path.includes("/church/counselors")) return "counselors";
+    if (path.includes("/church/matches")) return "matches";
+    return searchParams.get("tab") || "overview";
+  };
+  const activeTab = getTabFromPath();
 
   const isHigherRoleViewer =
     Boolean(viewedChurchAdminAccountId) && user?.role !== "ChurchAdmin";
@@ -245,21 +255,36 @@ const ChurchAdminDashboard = () => {
       label: "Image",
       render: (_, row) => {
         const imgUrl = row.photoUrl || row.profilePictureUrl;
-        return imgUrl ? (
-          <img
-            src={imgUrl}
-            alt=""
-            className="w-8 h-8 rounded-full object-cover"
-          />
-        ) : (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-bold">
-            {row.firstName?.[0]}
-            {row.lastName?.[0]}
-          </div>
+        return (
+          <Link to={`/church/members/${row.accountId}`}>
+            {imgUrl ? (
+              <img
+                src={imgUrl}
+                alt=""
+                className="w-8 h-8 rounded-full object-cover hover:opacity-80 transition-opacity"
+              />
+            ) : (
+              <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-bold hover:bg-gray-600 transition-colors">
+                {row.firstName?.[0]}
+                {row.lastName?.[0]}
+              </div>
+            )}
+          </Link>
         );
       },
     },
-    { key: "firstName", label: "Name", render: (_, row) => `${row.firstName} ${row.lastName}` },
+    {
+      key: "firstName",
+      label: "Name",
+      render: (_, row) => (
+        <Link
+          to={`/church/members/${row.accountId}`}
+          className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          {row.firstName} {row.lastName}
+        </Link>
+      ),
+    },
     { key: "email", label: "Email" },
     {
       key: "gender",
@@ -289,21 +314,36 @@ const ChurchAdminDashboard = () => {
       label: "Image",
       render: (_, row) => {
         const imgUrl = row.photoUrl || row.profilePictureUrl;
-        return imgUrl ? (
-          <img
-            src={imgUrl}
-            alt=""
-            className="w-8 h-8 rounded-full object-cover"
-          />
-        ) : (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-bold">
-            {row.firstName?.[0]}
-            {row.lastName?.[0]}
-          </div>
+        return (
+          <Link to={`/church/members/${row.accountId}`}>
+            {imgUrl ? (
+              <img
+                src={imgUrl}
+                alt=""
+                className="w-8 h-8 rounded-full object-cover hover:opacity-80 transition-opacity"
+              />
+            ) : (
+              <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-bold hover:bg-gray-600 transition-colors">
+                {row.firstName?.[0]}
+                {row.lastName?.[0]}
+              </div>
+            )}
+          </Link>
         );
       },
     },
-    { key: "firstName", label: "Name", render: (_, row) => `${row.firstName} ${row.lastName}` },
+    {
+      key: "firstName",
+      label: "Name",
+      render: (_, row) => (
+        <Link
+          to={`/church/members/${row.accountId}`}
+          className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          {row.firstName} {row.lastName}
+        </Link>
+      ),
+    },
     { key: "email", label: "Email" },
     {
       key: "gender",
@@ -366,8 +406,8 @@ const ChurchAdminDashboard = () => {
     },
   ];
 
-  return (
-    <DashboardLayout sidebar={sidebar}>
+  const renderContent = () => (
+    <div className={bare ? "p-8" : ""}>
       {loading && activeTab === "overview" ? (
         <div className="flex items-center justify-center min-h-screen">
           <div className="text-center mb-20">
@@ -724,6 +764,16 @@ const ChurchAdminDashboard = () => {
           onClose={() => setToast(null)}
         />
       )}
+    </div>
+  );
+
+  if (bare) {
+    return renderContent();
+  }
+
+  return (
+    <DashboardLayout sidebar={sidebar}>
+      {renderContent()}
     </DashboardLayout>
   );
 };

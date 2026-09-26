@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import apiClient from '../api/apiClient';
 
 const SubscriptionPage = () => {
     const [loading, setLoading] = useState(false);
@@ -7,35 +8,16 @@ const SubscriptionPage = () => {
 
     const handleSelectPlan = async () => {
         setLoading(true);
-        const token = localStorage.getItem('token');
-
-        if (!token) {
-            alert('Please login first to upgrade your plan.');
-            navigate('/');
-            return;
-        }
-
         try {
-            const response = await fetch('http://localhost:5000/api/auth/subscription', {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({ tier: 'premium' })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                alert(`Success! You have upgraded to the Kingdom Premium plan.`);
-                navigate('/'); // Redirect to home or dashboard after success
+            const response = await apiClient.put('/subscriptions/tier', { tier: 'PREMIUM' });
+            if (response.data?.success) {
+                alert('Success! You have selected the Kingdom Premium plan.');
+                navigate('/');
             } else {
-                alert(data.message || 'Failed to update subscription');
+                alert(response.data?.message || 'Subscriptions are managed through the Lifeline mobile app.');
             }
         } catch (error) {
-            console.error('Subscription error:', error);
-            alert('Could not connect to the server.');
+            alert(error.response?.data?.message || 'Subscriptions and matchmaking upgrades are processed securely in the Lifeline mobile app.');
         } finally {
             setLoading(false);
         }
@@ -64,6 +46,17 @@ const SubscriptionPage = () => {
             <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-indigo-100 rounded-full blur-3xl opacity-50" />
 
             <div className="relative z-10 w-full max-w-4xl">
+                {/* Mobile Architecture Notice */}
+                <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-center gap-3 text-left">
+                    <span className="text-2xl">📱</span>
+                    <div>
+                        <h4 className="text-sm font-bold text-amber-900">Mobile Native Experience</h4>
+                        <p className="text-xs text-amber-700 mt-0.5">
+                            Candidate profiles, match discovery, and premium membership perks are native to the <strong>Lifeline Mobile App</strong> (iOS & Android). Web portals are dedicated to church leadership, pastoral oversight, and administration.
+                        </p>
+                    </div>
+                </div>
+
                 {/* Header Section */}
                 <div className="text-center mb-16">
                     <div className="inline-block px-4 py-1.5 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-[10px] font-bold uppercase tracking-widest mb-6 transition-all">

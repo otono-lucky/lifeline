@@ -13,16 +13,22 @@ import {
   debriefReset,
   reviewAppeal,
   reviewVetting,
+  listAppeals,
+  getAppeal,
 } from "../controllers/vettingController";
 
 const router = express.Router();
 
 router.use(authMiddleware);
 
-// Counselor reviews
+// SuperAdmin appeals queue & detail
+router.get("/appeals", requireRole(["SuperAdmin"]), listAppeals);
+router.get("/appeals/:appealId", requireRole(["SuperAdmin"]), getAppeal);
+
+// Counselor & Pastor reviews
 router.post(
   "/users/:userId/review",
-  requireRole(["Counselor", "SuperAdmin"]),
+  requireRole(["Counselor", "Pastor", "SuperAdmin"]),
   validateBody(VettingReviewSchema),
   reviewVetting,
 );
@@ -30,7 +36,7 @@ router.post(
 // Counselor-Mediated Status Reset
 router.post(
   "/users/:userId/debrief-reset",
-  requireRole(["Counselor", "SuperAdmin"]),
+  requireRole(["Counselor", "Pastor", "SuperAdmin"]),
   validateBody(DebriefResetSchema),
   debriefReset,
 );

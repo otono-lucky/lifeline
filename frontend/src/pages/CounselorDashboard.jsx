@@ -9,7 +9,7 @@ import {
   Toast,
   ActionMenu,
 } from "../components";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import {
   CircleCheckBig,
@@ -77,12 +77,20 @@ const renderVettingStatusBadge = (status) => {
   }
 };
 
-const CounselorDashboard = () => {
+const CounselorDashboard = ({ bare = false, defaultTab = null }) => {
   const { user } = useAuth();
   const { id: viewedCounselorAccountId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const getTabFromPath = () => {
+    if (defaultTab) return defaultTab;
+    const path = location.pathname;
+    if (path.includes("/church/members") || path.includes("/church/users") || path.includes("/church/vetting") || path.includes("/church/debriefs")) return "users";
+    if (path.includes("/church/matches")) return "matches";
+    return "dashboard";
+  };
+  const [activeTab, setActiveTab] = useState(getTabFromPath());
   const [toast, setToast] = useState(null);
   const [showVerifyModal, setShowVerifyModal] = useState(false);
   const [showDebriefModal, setShowDebriefModal] = useState(false);
@@ -299,24 +307,35 @@ const CounselorDashboard = () => {
       label: "Image",
       render: (_, row) => {
         const imgUrl = row.photoUrl || row.profilePictureUrl;
-        return imgUrl ? (
-          <img
-            src={imgUrl}
-            alt=""
-            className="w-8 h-8 rounded-full object-cover"
-          />
-        ) : (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-bold">
-            {row.firstName?.[0]}
-            {row.lastName?.[0]}
-          </div>
+        return (
+          <Link to={`/church/vetting/${row.accountId}`}>
+            {imgUrl ? (
+              <img
+                src={imgUrl}
+                alt=""
+                className="w-8 h-8 rounded-full object-cover hover:opacity-80 transition-opacity"
+              />
+            ) : (
+              <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-bold hover:bg-gray-600 transition-colors">
+                {row.firstName?.[0]}
+                {row.lastName?.[0]}
+              </div>
+            )}
+          </Link>
         );
       },
     },
     {
       key: "firstName",
       label: "Name",
-      render: (_, row) => `${row.firstName} ${row.lastName}`,
+      render: (_, row) => (
+        <Link
+          to={`/church/vetting/${row.accountId}`}
+          className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          {row.firstName} {row.lastName}
+        </Link>
+      ),
     },
     { key: "email", label: "Email" },
     { key: "gender", label: "Gender" },
@@ -358,8 +377,8 @@ const CounselorDashboard = () => {
     },
   ];
 
-  return (
-    <DashboardLayout sidebar={sidebar}>
+  const renderContent = () => (
+    <div className={bare ? "p-8" : ""}>
       {activeTab === "dashboard" && (
         <div className="space-y-6">
           <h1 className="text-3xl font-bold text-gray-900">
@@ -435,40 +454,24 @@ const CounselorDashboard = () => {
               actions={(row) => {
                 const items = [
                   {
-                    label: "View Details",
+                    label: "Evaluate Dossier",
                     onClick: () =>
-                      navigate(`/dashboard/user/${row.accountId}`),
+                      navigate(`/church/vetting/${row.accountId}`),
                   },
                   {
-                    label: "Review Vetting",
-                    onClick: () => {
-                      setSelectedUser(row);
-                      setVerifyForm({
-                        decision: "APPROVE",
-                        notes: "",
-                        reason: "",
-                      });
-                      setShowVerifyModal(true);
-                    },
+                    label: "View Member Profile",
+                    onClick: () =>
+                      navigate(`/church/members/${row.accountId}`),
                   },
                 ];
 
                 if (row.vettingStatus === "DEBRIEF_REQUIRED") {
                   items.push({
                     label: "Exit Debrief & Reset",
-                    onClick: () => {
-                      setSelectedUser(row);
-                      setDebriefForm({ notes: "", readinessScore: 10 });
-                      setShowDebriefModal(true);
-                    },
+                    onClick: () =>
+                      navigate(`/church/vetting/${row.accountId}`),
                   });
                 }
-
-                items.push({
-                  label: "Create Match",
-                  onClick: () =>
-                    openMatchModal({ primaryAccountId: row.accountId }),
-                });
 
                 return <ActionMenu items={items} />;
               }}
@@ -761,6 +764,16 @@ const CounselorDashboard = () => {
           onClose={() => setToast(null)}
         />
       )}
+    </div>
+  );
+
+  if (bare) {
+    return renderContent();
+  }
+
+  return (
+    <DashboardLayout sidebar={sidebar}>
+      {renderContent()}
     </DashboardLayout>
   );
 };
