@@ -9,7 +9,7 @@ import {
   Toast,
   ActionMenu,
 } from "../components";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation, Link } from "react-router-dom";
 import CreateCounsellorModal from "../features/dashboard/components/CreateCounsellorModal";
 import { Building2, CircleCheckBig, ShieldCheck, Users } from "lucide-react";
 import {
@@ -30,7 +30,7 @@ import {
   useCreateChurchMutation,
 } from "../api/queries/churches";
 
-const SuperAdminDashboard = () => {
+const SuperAdminDashboard = ({ bare = false, defaultTab = null }) => {
   const [toast, setToast] = useState(null);
   const [showCreateChurch, setShowCreateChurch] = useState(false);
   const [showCreateAdmin, setShowCreateAdmin] = useState(false);
@@ -38,17 +38,33 @@ const SuperAdminDashboard = () => {
   const [showCreateMatch, setShowCreateMatch] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const activeTab = searchParams.get("tab") || "overview";
+  const location = useLocation();
+
+  const getTabFromPath = () => {
+    if (defaultTab) return defaultTab;
+    const path = location.pathname;
+    if (path.includes("/admin/churches")) return "churches";
+    if (path.includes("/admin/users")) return "users";
+    if (path.includes("/admin/church-admins")) return "admins";
+    if (path.includes("/admin/counselors")) return "counselors";
+    if (path.includes("/admin/matches")) return "matches";
+    return searchParams.get("tab") || "overview";
+  };
+  const activeTab = getTabFromPath();
 
   const [churchForm, setChurchForm] = useState({
     officialName: "",
     aka: "",
-    email: "",
-    phone: "",
+    country: "Nigeria",
     state: "",
-    lga: "",
     city: "",
     address: "",
+    modelType: "PARENT_BRANCH",
+    email: "",
+    phone: "",
+    pastorName: "",
+    pastorEmail: "",
+    pastorPhone: "",
   });
 
   const [adminForm, setAdminForm] = useState({
@@ -58,6 +74,7 @@ const SuperAdminDashboard = () => {
     firstName: "",
     lastName: "",
     phone: "",
+    title: "Senior Pastor",
   });
 
   const [matchForm, setMatchForm] = useState({
@@ -201,18 +218,37 @@ const SuperAdminDashboard = () => {
   const handleCreateChurch = async (e) => {
     e.preventDefault();
     try {
-      const response = await createChurchMutation.mutateAsync(churchForm);
+      const payload = {
+        officialName: churchForm.officialName,
+        aka: churchForm.aka || undefined,
+        country: churchForm.country || "Nigeria",
+        state: churchForm.state,
+        city: churchForm.city || undefined,
+        address: churchForm.address || undefined,
+        modelType: churchForm.modelType || "PARENT_BRANCH",
+        email: churchForm.email,
+        phone: churchForm.phone,
+        ...(churchForm.pastorName ? { pastorName: churchForm.pastorName } : {}),
+        ...(churchForm.pastorEmail ? { pastorEmail: churchForm.pastorEmail } : {}),
+        ...(churchForm.pastorPhone ? { pastorPhone: churchForm.pastorPhone } : {}),
+      };
+
+      const response = await createChurchMutation.mutateAsync(payload);
       if (response.success) {
         setToast({ type: "success", message: "Church created successfully!" });
         setChurchForm({
           officialName: "",
           aka: "",
-          email: "",
-          phone: "",
+          country: "Nigeria",
           state: "",
-          lga: "",
           city: "",
           address: "",
+          modelType: "PARENT_BRANCH",
+          email: "",
+          phone: "",
+          pastorName: "",
+          pastorEmail: "",
+          pastorPhone: "",
         });
         setShowCreateChurch(false);
       }
@@ -224,7 +260,17 @@ const SuperAdminDashboard = () => {
   const handleCreateAdmin = async (e) => {
     e.preventDefault();
     try {
-      const response = await createChurchAdminMutation.mutateAsync(adminForm);
+      const payload = {
+        churchId: adminForm.churchId,
+        email: adminForm.email,
+        password: adminForm.password,
+        firstName: adminForm.firstName,
+        lastName: adminForm.lastName,
+        phone: adminForm.phone || undefined,
+        title: adminForm.title || undefined,
+      };
+
+      const response = await createChurchAdminMutation.mutateAsync(payload);
       if (response.success) {
         setToast({
           type: "success",
@@ -237,6 +283,7 @@ const SuperAdminDashboard = () => {
           firstName: "",
           lastName: "",
           phone: "",
+          title: "Senior Pastor",
         });
         setShowCreateAdmin(false);
       }
@@ -385,41 +432,59 @@ const SuperAdminDashboard = () => {
   };
 
   const churchColumns = [
-    { key: "officialName", label: "Name" },
+    {
+      key: "officialName",
+      label: "Name",
+      render: (name, row) => (
+        <Link
+          to={`/admin/churches/${row.id}`}
+          className="font-medium text-blue-600 hover:text-blue-800 hover:underline inline-flex items-center gap-1.5"
+        >
+          <span>{name}</span>
+          {row.aka && <span className="text-xs text-gray-500 font-normal">({row.aka})</span>}
+        </Link>
+      ),
+    },
     { key: "email", label: "Email" },
     { key: "state", label: "State" },
     { key: "status", label: "Status" },
   ];
 
   const userColumns = [
-    // {
-    //   key: "accountId",
-    //   label: "ID",
-    //   render: (accountId) => accountId?.substring(0, 8),
-    // },
     {
       key: "profilePictureUrl",
       label: "Image",
       render: (_, row) => {
         const photo = row.photoUrl || row.profilePictureUrl;
-        return photo ? (
-          <img
-            src={photo}
-            alt=""
-            className="w-8 h-8 rounded-full object-cover"
-          />
-        ) : (
-          <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-semibold">
-            {row.firstName?.[0]}
-            {row.lastName?.[0]}
-          </div>
+        return (
+          <Link to={`/dashboard/user/${row.accountId}`}>
+            {photo ? (
+              <img
+                src={photo}
+                alt=""
+                className="w-8 h-8 rounded-full object-cover hover:opacity-80 transition-opacity"
+              />
+            ) : (
+              <div className="flex items-center justify-center w-8 h-8 rounded-full text-white bg-gray-500 text-xs font-semibold hover:bg-gray-600 transition-colors">
+                {row.firstName?.[0]}
+                {row.lastName?.[0]}
+              </div>
+            )}
+          </Link>
         );
       },
     },
     {
       key: "firstName",
       label: "Name",
-      render: (_, row) => `${row.firstName} ${row.lastName}`,
+      render: (_, row) => (
+        <Link
+          to={`/dashboard/user/${row.accountId}`}
+          className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
+        >
+          {row.firstName} {row.lastName}
+        </Link>
+      ),
     },
     { key: "email", label: "Email", render: (_, row) => row.email },
     {
@@ -534,8 +599,8 @@ const SuperAdminDashboard = () => {
     },
   ];
 
-  return (
-    <DashboardLayout sidebar={sidebar}>
+  const renderContent = () => (
+    <div className={bare ? "p-8" : ""}>
       {activeTab === "overview" && (
         <div className="space-y-6">
           <h1 className="text-3xl font-bold text-gray-900">
@@ -819,6 +884,23 @@ const SuperAdminDashboard = () => {
         }
       >
         <form className="space-y-4">
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">
+              Onboarding Model Type
+            </label>
+            <select
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-white"
+              value={churchForm.modelType}
+              onChange={(e) =>
+                setChurchForm({ ...churchForm, modelType: e.target.value })
+              }
+              required
+            >
+              <option value="PARENT_BRANCH">Parent-Branch Denomination (e.g. RCCG, Winners)</option>
+              <option value="INDIVIDUAL_PARISH">Independent Parish / Local Assembly</option>
+            </select>
+          </div>
+
           <input
             type="text"
             placeholder="Official Name"
@@ -831,70 +913,114 @@ const SuperAdminDashboard = () => {
           />
           <input
             type="text"
-            placeholder="Also Known As"
+            placeholder="Also Known As (e.g. City of David)"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={churchForm.aka}
             onChange={(e) =>
               setChurchForm({ ...churchForm, aka: e.target.value })
             }
           />
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={churchForm.email}
-            onChange={(e) =>
-              setChurchForm({ ...churchForm, email: e.target.value })
-            }
-            required
-          />
-          <input
-            type="tel"
-            placeholder="Phone"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={churchForm.phone}
-            onChange={(e) =>
-              setChurchForm({ ...churchForm, phone: e.target.value })
-            }
-            required
-          />
-          <input
-            type="text"
-            placeholder="State"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={churchForm.state}
-            onChange={(e) =>
-              setChurchForm({ ...churchForm, state: e.target.value })
-            }
-            required
-          />
-          <input
-            type="text"
-            placeholder="LGA"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={churchForm.lga}
-            onChange={(e) =>
-              setChurchForm({ ...churchForm, lga: e.target.value })
-            }
-          />
-          <input
-            type="text"
-            placeholder="City"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={churchForm.city}
-            onChange={(e) =>
-              setChurchForm({ ...churchForm, city: e.target.value })
-            }
-          />
-          <input
-            type="text"
-            placeholder="Address"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={churchForm.address}
-            onChange={(e) =>
-              setChurchForm({ ...churchForm, address: e.target.value })
-            }
-          />
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="text"
+              placeholder="Country"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={churchForm.country}
+              onChange={(e) =>
+                setChurchForm({ ...churchForm, country: e.target.value })
+              }
+              required
+            />
+            <input
+              type="text"
+              placeholder="State"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={churchForm.state}
+              onChange={(e) =>
+                setChurchForm({ ...churchForm, state: e.target.value })
+              }
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="email"
+              placeholder="Official Contact Email"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={churchForm.email}
+              onChange={(e) =>
+                setChurchForm({ ...churchForm, email: e.target.value })
+              }
+              required
+            />
+            <input
+              type="tel"
+              placeholder="Official Contact Phone"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={churchForm.phone}
+              onChange={(e) =>
+                setChurchForm({ ...churchForm, phone: e.target.value })
+              }
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="text"
+              placeholder="City (optional)"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={churchForm.city}
+              onChange={(e) =>
+                setChurchForm({ ...churchForm, city: e.target.value })
+              }
+            />
+            <input
+              type="text"
+              placeholder="Physical Address (optional)"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={churchForm.address}
+              onChange={(e) =>
+                setChurchForm({ ...churchForm, address: e.target.value })
+              }
+            />
+          </div>
+
+          <div className="pt-3 border-t border-gray-100">
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+              Senior Pastor Contact (Captured at Onboarding)
+            </p>
+            <div className="space-y-3">
+              <input
+                type="text"
+                placeholder="Senior Pastor Full Name"
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                value={churchForm.pastorName}
+                onChange={(e) =>
+                  setChurchForm({ ...churchForm, pastorName: e.target.value })
+                }
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="email"
+                  placeholder="Pastor Direct Email"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  value={churchForm.pastorEmail}
+                  onChange={(e) =>
+                    setChurchForm({ ...churchForm, pastorEmail: e.target.value })
+                  }
+                />
+                <input
+                  type="tel"
+                  placeholder="Pastor Direct Phone"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                  value={churchForm.pastorPhone}
+                  onChange={(e) =>
+                    setChurchForm({ ...churchForm, pastorPhone: e.target.value })
+                  }
+                />
+              </div>
+            </div>
+          </div>
         </form>
       </Modal>
 
@@ -936,48 +1062,65 @@ const SuperAdminDashboard = () => {
               </option>
             ))}
           </select>
+
           <input
             type="text"
-            placeholder="First Name"
+            placeholder="Pastoral Title (e.g. Senior Pastor, Resident Pastor, Reverend)"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={adminForm.firstName}
+            value={adminForm.title}
             onChange={(e) =>
-              setAdminForm({ ...adminForm, firstName: e.target.value })
-            }
-            required
-          />
-          <input
-            type="text"
-            placeholder="Last Name"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={adminForm.lastName}
-            onChange={(e) =>
-              setAdminForm({ ...adminForm, lastName: e.target.value })
-            }
-            required
-          />
-          <input
-            type="email"
-            placeholder="Email"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={adminForm.email}
-            onChange={(e) =>
-              setAdminForm({ ...adminForm, email: e.target.value })
-            }
-            required
-          />
-          <input
-            type="tel"
-            placeholder="Phone"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-            value={adminForm.phone}
-            onChange={(e) =>
-              setAdminForm({ ...adminForm, phone: e.target.value })
+              setAdminForm({ ...adminForm, title: e.target.value })
             }
           />
+
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="text"
+              placeholder="First Name"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={adminForm.firstName}
+              onChange={(e) =>
+                setAdminForm({ ...adminForm, firstName: e.target.value })
+              }
+              required
+            />
+            <input
+              type="text"
+              placeholder="Last Name"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={adminForm.lastName}
+              onChange={(e) =>
+                setAdminForm({ ...adminForm, lastName: e.target.value })
+              }
+              required
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="email"
+              placeholder="Admin Email"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={adminForm.email}
+              onChange={(e) =>
+                setAdminForm({ ...adminForm, email: e.target.value })
+              }
+              required
+            />
+            <input
+              type="tel"
+              placeholder="Phone (optional)"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              value={adminForm.phone}
+              onChange={(e) =>
+                setAdminForm({ ...adminForm, phone: e.target.value })
+              }
+            />
+          </div>
+
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Password (minimum 8 characters)"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={adminForm.password}
             onChange={(e) =>
@@ -1092,6 +1235,16 @@ const SuperAdminDashboard = () => {
           onClose={() => setToast(null)}
         />
       )}
+    </div>
+  );
+
+  if (bare) {
+    return renderContent();
+  }
+
+  return (
+    <DashboardLayout sidebar={sidebar}>
+      {renderContent()}
     </DashboardLayout>
   );
 };

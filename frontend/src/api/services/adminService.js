@@ -80,9 +80,29 @@ export const adminService = {
     const response = await apiClient.get(`/counselor/${accountId}`);
     return response.data;
   },
-  // Get all church admins
+
+  // Get all counselors
   getCounsellors: async (params = {}) => {
     const response = await apiClient.get("/counselor/list-all", { params });
+    return response.data;
+  },
+
+  // Appeals Management
+  getAppeals: async (params = {}) => {
+    const response = await apiClient.get("/vetting/appeals", { params });
+    return response.data;
+  },
+
+  getAppeal: async (appealId) => {
+    const response = await apiClient.get(`/vetting/appeals/${appealId}`);
+    return response.data;
+  },
+
+  reviewAppeal: async (appealId, status, notes = "") => {
+    const response = await apiClient.post(`/vetting/appeals/${appealId}/review`, {
+      status,
+      notes: notes || undefined,
+    });
     return response.data;
   },
 };

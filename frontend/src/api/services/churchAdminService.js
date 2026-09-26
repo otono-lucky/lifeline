@@ -4,7 +4,7 @@ export const churchAdminService = {
   // Get church admin dashboard
   getDashboard: async (accountId = null) => {
     const endpoint = accountId
-      ? `/church-admin/${accountId}/dashboard`
+      ? `/church-admin/dashboard/${accountId}`
       : "/church-admin/dashboard";
     const response = await apiClient.get(endpoint);
     return response.data;

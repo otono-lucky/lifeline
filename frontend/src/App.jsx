@@ -21,10 +21,17 @@ import VerifyEmailPage from "./pages/VerifyEmailPage";
 import EmailPreviewPage from "./pages/EmailPreviewPage";
 import SubscriptionPage from "./pages/SubscriptionPage";
 
-// Dashboard pages
+// Layouts & Dynamic Portals
+import { AdminLayout, ChurchLayout } from "./layouts";
 import SuperAdminDashboard from "./pages/SuperAdminDashboard";
-import ChurchAdminDashboard from "./pages/ChurchAdminDashboard";
-import CounselorDashboard from "./pages/CounselorDashboard";
+import ChurchDetailPage from "./pages/ChurchDetailPage";
+import AppealsQueuePage from "./pages/AppealsQueuePage";
+import SubscriptionAnalyticsPage from "./pages/SubscriptionAnalyticsPage";
+import ChurchPortalPage from "./pages/ChurchPortalPage";
+import MemberDetailPage from "./pages/MemberDetailPage";
+import VettingQueuePage from "./pages/VettingQueuePage";
+import MonitoredChatsPage from "./pages/MonitoredChatsPage";
+import ParishSettingsPage from "./pages/ParishSettingsPage";
 import UserDashboard from "./pages/UserDashboard";
 
 // Redirect component based on role
@@ -46,14 +53,14 @@ const DashboardRedirect = () => {
     return <Navigate to="/login" replace />;
   }
 
-  // Redirect to appropriate dashboard based on role
+  // Redirect to appropriate dashboard based on role per §2 RBAC
   switch (user.role) {
     case "SuperAdmin":
-      return <Navigate to="/dashboard/admin" replace />;
+      return <Navigate to="/admin" replace />;
     case "ChurchAdmin":
-      return <Navigate to="/dashboard/church-admin" replace />;
     case "Counselor":
-      return <Navigate to="/dashboard/counselor" replace />;
+    case "Pastor":
+      return <Navigate to="/church" replace />;
     case "User":
       return <Navigate to="/dashboard/user" replace />;
     default:
@@ -84,44 +91,65 @@ function App() {
             <Route path="/email-preview" element={<EmailPreviewPage />} />
             <Route path="/subscription" element={<SubscriptionPage />} />
 
-            {/* Dashboard Routes */}
+            {/* Canonical SuperAdmin Portal (/admin/*) */}
             <Route
-              path="/dashboard/admin"
+              path="/admin"
               element={
                 <ProtectedRoute allowedRoles={["SuperAdmin"]}>
-                  <SuperAdminDashboard />
+                  <AdminLayout />
                 </ProtectedRoute>
               }
-            />
+            >
+              <Route index element={<SuperAdminDashboard bare defaultTab="overview" />} />
+              <Route path="churches" element={<SuperAdminDashboard bare defaultTab="churches" />} />
+              <Route path="churches/:id" element={<ChurchDetailPage />} />
+              <Route path="users" element={<SuperAdminDashboard bare defaultTab="users" />} />
+              <Route path="church-admins" element={<SuperAdminDashboard bare defaultTab="admins" />} />
+              <Route path="counselors" element={<SuperAdminDashboard bare defaultTab="counselors" />} />
+              <Route path="matches" element={<SuperAdminDashboard bare defaultTab="matches" />} />
+              <Route path="appeals" element={<AppealsQueuePage />} />
+              <Route path="appeals/:id" element={<AppealsQueuePage />} />
+              <Route path="subscriptions" element={<SubscriptionAnalyticsPage />} />
+            </Route>
+
+            {/* Canonical Unified Church Portal (/church/*) */}
             <Route
-              path="/dashboard/church-admin/:id?"
+              path="/church"
               element={
-                <ProtectedRoute allowedRoles={["ChurchAdmin", "SuperAdmin"]}>
-                  <ChurchAdminDashboard />
+                <ProtectedRoute allowedRoles={["ChurchAdmin", "Counselor", "Pastor", "SuperAdmin"]}>
+                  <ChurchLayout />
                 </ProtectedRoute>
               }
-            />
-           
-            <Route
-              path="/dashboard/counselor/:id?"
-              element={
-                <ProtectedRoute
-                  allowedRoles={["Counselor", "ChurchAdmin", "SuperAdmin"]}
-                >
-                  <CounselorDashboard />
-                </ProtectedRoute>
-              }
-            />
+            >
+              <Route index element={<ChurchPortalPage section="overview" />} />
+              <Route path="members" element={<ChurchPortalPage section="members" />} />
+              <Route path="members/:id" element={<MemberDetailPage />} />
+              <Route path="counselors" element={<ChurchPortalPage section="counselors" />} />
+              <Route path="vetting" element={<VettingQueuePage />} />
+              <Route path="vetting/:id" element={<VettingQueuePage />} />
+              <Route path="matches" element={<ChurchPortalPage section="matches" />} />
+              <Route path="chats" element={<MonitoredChatsPage />} />
+              <Route path="chats/:conversationId" element={<MonitoredChatsPage />} />
+              <Route path="debriefs" element={<VettingQueuePage />} />
+              <Route path="settings" element={<ParishSettingsPage />} />
+            </Route>
+
+            {/* User Profile View (Web dater inspector / legacy) */}
             <Route
               path="/dashboard/user/:id?"
               element={
                 <ProtectedRoute
-                  allowedRoles={["User", "Counselor", "ChurchAdmin", "SuperAdmin"]}
+                  allowedRoles={["User", "Counselor", "ChurchAdmin", "Pastor", "SuperAdmin"]}
                 >
                   <UserDashboard />
                 </ProtectedRoute>
               }
             />
+
+            {/* Backward Compatibility Redirects */}
+            <Route path="/dashboard/admin" element={<Navigate to="/admin" replace />} />
+            <Route path="/dashboard/church-admin/:id?" element={<Navigate to="/church" replace />} />
+            <Route path="/dashboard/counselor/:id?" element={<Navigate to="/church" replace />} />
 
             {/* Home redirect */}
             <Route path="/" element={<DashboardRedirect />} />

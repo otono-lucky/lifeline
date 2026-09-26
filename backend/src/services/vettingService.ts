@@ -165,3 +165,75 @@ export const reviewAppealRequest = async (
     userId: appeal.userId,
   };
 };
+
+export const getAppeals = async (status?: string) => {
+  const where: any = {};
+  if (status) {
+    where.status = status;
+  }
+  const appeals = await prisma.appealRequest.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    include: {
+      user: {
+        include: {
+          account: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+          church: {
+            select: {
+              officialName: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  return appeals;
+};
+
+export const getAppealById = async (appealId: string) => {
+  const appeal = await prisma.appealRequest.findUnique({
+    where: { id: appealId },
+    include: {
+      user: {
+        include: {
+          account: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+              phone: true,
+            },
+          },
+          church: {
+            select: {
+              officialName: true,
+            },
+          },
+          assignedCounselor: {
+            include: {
+              account: {
+                select: {
+                  firstName: true,
+                  lastName: true,
+                  email: true,
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!appeal) throw new Error("Appeal request not found");
+  return appeal;
+};
+
