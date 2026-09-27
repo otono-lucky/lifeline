@@ -138,6 +138,7 @@ export default function DiscoveryScreen() {
             {candidates.map((candidate) => {
               const primaryPhoto =
                 candidate.photos?.[0]?.photoUrl ||
+                candidate.photos?.[0]?.url ||
                 "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=600";
               const isSending =
                 sendRequestMutation.isPending &&

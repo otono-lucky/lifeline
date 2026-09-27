@@ -19,7 +19,7 @@ export const MemberDetailPage = () => {
   const role = currentUser?.role;
   const isChurchAdmin = role === "ChurchAdmin";
   const isCounselorOrHigher =
-    role === "Counselor" || role === "Pastor" || role === "SuperAdmin";
+    role === "Counselor" || role === "SuperAdmin";
 
   const userProfileQuery = useUserProfileQuery(id, {
     enabled: Boolean(id),

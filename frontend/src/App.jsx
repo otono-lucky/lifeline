@@ -59,7 +59,6 @@ const DashboardRedirect = () => {
       return <Navigate to="/admin" replace />;
     case "ChurchAdmin":
     case "Counselor":
-    case "Pastor":
       return <Navigate to="/church" replace />;
     case "User":
       return <Navigate to="/dashboard/user" replace />;
@@ -116,7 +115,7 @@ function App() {
             <Route
               path="/church"
               element={
-                <ProtectedRoute allowedRoles={["ChurchAdmin", "Counselor", "Pastor", "SuperAdmin"]}>
+                <ProtectedRoute allowedRoles={["ChurchAdmin", "Counselor", "SuperAdmin"]}>
                   <ChurchLayout />
                 </ProtectedRoute>
               }
@@ -139,7 +138,7 @@ function App() {
               path="/dashboard/user/:id?"
               element={
                 <ProtectedRoute
-                  allowedRoles={["User", "Counselor", "ChurchAdmin", "Pastor", "SuperAdmin"]}
+                  allowedRoles={["User", "Counselor", "ChurchAdmin", "SuperAdmin"]}
                 >
                   <UserDashboard />
                 </ProtectedRoute>

@@ -35,6 +35,7 @@ export type SubscriptionStatusType =
 export interface UserPhoto {
   id: string;
   photoUrl: string;
+  url?: string;
   order: number;
 }
 
@@ -76,6 +77,7 @@ export interface UserProfile {
   interests?: string[] | null;
   videoIntroUrl?: string;
   videoDurationSeconds?: number;
+  profilePictureUrl?: string;
   photos: UserPhoto[];
   socials: SocialMediaHandle[];
   isVerified: boolean;

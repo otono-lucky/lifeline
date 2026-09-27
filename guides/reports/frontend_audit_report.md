@@ -36,8 +36,8 @@ The frontend currently contains functional prototype code for SuperAdmin, Church
    All three dashboard pages (`SuperAdminDashboard`, `ChurchAdminDashboard`, `CounselorDashboard`) embed a "Create Match" modal and call `useCreateManualMatchMutation` (`POST /api/matches`). Under the new architecture, matching is an automated discovery and 3-slot request engine conducted directly between vetted users on mobile.
 8. **Missing Counselor Operational Screens (§11.C Screens 17–21)**:
    Counselors lack a dedicated **Vetting Queue**, an in-depth **Vetting Review & Decision Screen** (evaluating the 100% profile gate, 3 photos, video intro, and social links), **Active Matches Oversight** (Screen 19), **Counselor Group Chat** (Screen 20), and **Status Reset Debrief Queue** (Screen 21).
-9. **Routing & Role Gate Gaps (`ProtectedRoute.jsx` & `DashboardRedirect`)**:
-   The `Pastor` role is entirely unhandled in `App.jsx`, `ProtectedRoute.jsx`, and `DashboardRedirect`. A Pastor logging in is erroneously routed to `/login`.
+9. **Institutional Leadership Consolidation & Religious Agnosticism**:
+   Rather than hardcoding a denomination-specific `Pastor` role enum, the spiritual leader / head of the parish is modeled as `ChurchAdmin` with a customizable ecclesiastical `title` attribute (`Senior Pastor`, `Reverend Father`, `Imam`, `Resident Minister`, etc.). This preserves religious neutrality while enforcing a clean 4-tier system RBAC (`SuperAdmin`, `ChurchAdmin`, `Counselor`, `User`).
 
 ---
 
@@ -744,34 +744,35 @@ Instead of passing sidebars as prop-drilled components into a single `DashboardL
 
 ---
 
-### 5.6 Three-Tier Church Governance & Operational Dynamics (Counselor Operations Hub vs ChurchAdmin Parish Ops vs Pastor Executive Overseer)
+### 5.6 Institutional Church Governance & Operational Dynamics (ChurchAdmin Institutional Leader vs Counselor Operations Hub)
 
-Grounded in the product requirements (`guides/full_architecture.md §2, §4, §6, §8, §11.C, §12.8`), the platform models church governance not as a single flat admin tool, but as a three-tier operational ecosystem balancing daily execution, administrative governance, and pastoral oversight:
+Grounded in the refined product architecture, the platform models church governance as a streamlined, denomination-agnostic two-tier institutional ecosystem balancing administrative management and operational mentoring:
+
+> [!IMPORTANT]
+> **Ecclesiastical & Religious Agnosticism:**
+> Religious organizations and faith traditions vary widely in how they designate leadership (e.g. *Pastor*, *Priest*, *Reverend*, *Minister*, *Imam*, *Rabbi*, *General Overseer*, or *Parish Director*). 
+> Modeling a discrete system role called `Pastor` is denominationally restrictive. In reality, the spiritual leader / head of the church serves as the **`ChurchAdmin`** (the organizational head). 
+> The leader's specific designation (e.g., `"Senior Pastor"`, `"Reverend Father"`, `"Resident Minister"`, `"Imam"`) is captured as a customizable `title` attribute on the `ChurchAdmin` profile, maintaining clean religious neutrality while preserving a strict 4-tier system RBAC (`SuperAdmin`, `ChurchAdmin`, `Counselor`, `User`).
 
 ```
 ┌────────────────────────────────────────────────────────────────────────┐
-│                        SENIOR PASTOR (Overseer)                        │
-│   • Has church-wide audit & pastoral visibility (all dossiers)        │
-│   • Steps in for difficult vetting calls, escalations & audits        │
-│   • Structurally excluded from dating discovery                       │
+│             CHURCH ADMIN (Institutional Leader & Parish Head)          │
+│   • Head / spiritual leader of the parish (Title: Pastor, Priest, etc.)│
+│   • Full administrative management (creates & manages counselors)      │
+│   • Member intake & triage (assigns members to counselors)             │
+│   • Top-level oversight: can step in on vetting escalations & appeals  │
+│   • Parish profile, campus address, and settings management            │
+│   • Structurally excluded from dating discovery by design              │
 └──────────────────────────────────┬─────────────────────────────────────┘
-                                   │ (Spiritual & Pastoral Oversight)
+                                   │ (Manages, Assigns & Oversees)
                                    ▼
-┌──────────────────────────────────┴─────────────────────────────────────┐
+┌────────────────────────────────────────────────────────────────────────┐
 │                       COUNSELOR (Operations Hub)                       │
 │   • Does 90% of day-to-day activities:                                │
-│       - Daily Vetting Queue (approve / deny / hard-block)              │
+│       - Daily Vetting Queue (evaluate photos, video intro, dossier)    │
 │       - 3-Way Counselor Group Chats with dating couples                │
-│       - Meeting / Calendar event confirmations                         │
+│       - Meeting / Calendar event confirmations & safety review         │
 │       - Exit Debriefs & Status Reset before members can re-enter pool  │
-└──────────────────────────────────▲─────────────────────────────────────┘
-                                   │ (Managed & Assigned by)
-┌──────────────────────────────────┴─────────────────────────────────────┐
-│                     CHURCH ADMIN (Parish Operations)                   │
-│   • Administrative management (creates & manages counselors)           │
-│   • Member intake & triage (assigns members to counselors)             │
-│   • Aggregated church metrics & settings                               │
-│   • ⚠️ Privacy Firewall: Restricted from salary, address & match data   │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -779,13 +780,12 @@ Grounded in the product requirements (`guides/full_architecture.md §2, §4, §6
 
 | Role & Focus | Core Daily Activities | Key Screen Routes | Data Access & Privacy Boundaries |
 |---|---|---|---|
-| **Counselor**<br>*(Daily Operations Hub)* | **90% of hands-on platform workload:**<br>1. Reviews applicant dossiers in Vetting Queue.<br>2. Verifies 100% profile gate (3 photos, liveness video, socials).<br>3. Executes vetting decisions (`approved`, `denied`, `hard_blocked`).<br>4. Actively monitors courtship in 3-way monitored Counselor Group Chat.<br>5. Confirms/approves dating meeting calendar events.<br>6. Conducts exit debriefs when relationships end before resetting candidate pool. | • `/church/vetting` (Queue)<br>• `/church/vetting/:id` (Dossier & Decision)<br>• `/church/matches` (Active Matches)<br>• `/church/chats/:conversationId` (Group Chat)<br>• `/church/debriefs` (Exit Debriefs)<br>• `/church/members` (Assigned Counselees) | • **Full dossier access** for assigned counselees (salary, residential address, social links, preferences).<br>• Cannot view or manage other counselors' non-assigned counselees unless reassigned. |
-| **ChurchAdmin**<br>*(Parish Operations & Staff Management)* | **Administrative stewardship & parish governance:**<br>1. Onboards and manages church counselors (`/church/counselors`).<br>2. Triage & assignment: routes newly registered parish members to counselors.<br>3. Monitors high-level parish metrics (member counts, counselor caseloads).<br>4. Manages parish profile, branches, and contact settings. | • `/church` (Parish Overview)<br>• `/church/members` (Directory & Assign Dropdown)<br>• `/church/counselors` (Counselor Management)<br>• `/church/counselors/new`<br>• `/church/settings` (Parish Info) | • **Privacy Firewall Enforced:** Strictly prohibited from seeing sensitive personal data (salary, home address, personal match preferences, external match partner identity).<br>• **Cannot run vetting decisions** (`Run vetting decisions: ❌`). |
-| **Pastor**<br>*(Senior Overseer & Spiritual Auditor)* | **Executive pastoral authority & escalation intervention:**<br>1. High-level dashboard monitoring church marriage health & growth.<br>2. Spiritual oversight: steps in on contentious vetting appeals, ethical concerns, or relationship disputes.<br>3. Cross-counselor audit: full church-wide visibility across all counselors (`/counselor/all-users`).<br>4. Emergency intervention: ability to execute vetting decisions or rebalance cases if a counselor is overloaded or absent. | • `/church` (Executive Pastoral Overview)<br>• `/church/members` (All Parish Members with full dossier)<br>• `/church/vetting` (Church-wide Vetting Queue)<br>• `/church/vetting/:id` (Audit Decision Workspace)<br>• `/church/matches` (Church-wide Active Courtships) | • **Full Audit Visibility:** Equal to Counselor but across the entire parish.<br>• Can view full dossiers (salary, background, notes) for pastoral care.<br>• **Structurally excluded** from dating discovery (no dating profile row in database). |
+| **Counselor**<br>*(Daily Operations Hub)* | **90% of hands-on platform workload:**<br>1. Reviews applicant dossiers in Vetting Queue.<br>2. Verifies 100% profile gate (photos, video intro, denomination).<br>3. Executes vetting decisions (`approved`, `denied`, `hard_blocked`).<br>4. Actively monitors courtship in 3-way monitored Counselor Group Chat.<br>5. Confirms/approves dating meeting calendar events.<br>6. Conducts exit debriefs when relationships end before resetting candidate pool. | • `/church/vetting` (Queue)<br>• `/church/vetting/:id` (Dossier & Decision)<br>• `/church/matches` (Active Matches)<br>• `/church/chats/:conversationId` (Group Chat)<br>• `/church/debriefs` (Exit Debriefs)<br>• `/church/members` (Assigned Counselees) | • **Full dossier access** for assigned counselees (salary, residential address, social links, preferences).<br>• Cannot view or manage other counselors' non-assigned counselees unless reassigned. |
+| **ChurchAdmin**<br>*(Institutional Leader & Parish Operations)* | **Administrative stewardship & parish governance:**<br>1. Onboards and manages church counselors (`/church/counselors`).<br>2. Triage & assignment: routes newly registered parish members to counselors.<br>3. Institutional oversight: steps in on contentious vetting appeals, ethical concerns, or relationship disputes.<br>4. Monitors high-level parish metrics (member counts, counselor caseloads).<br>5. Manages parish profile, branches, and contact settings. | • `/church` (Parish Overview)<br>• `/church/members` (Directory & Assign Dropdown)<br>• `/church/members/:id` (Member Profile)<br>• `/church/counselors` (Counselor Management)<br>• `/church/vetting` (Oversight Vetting Queue)<br>• `/church/settings` (Parish Info & Profile) | • **Administrative View with Safeguarding:** General member directory is safeguarded against gossip; sensitive dating criteria and salary tiers are firewalled unless acting in formal vetting oversight.<br>• **Structurally excluded** from dating discovery (no dating profile row in database). |
 
 #### End-to-End Operational Lifecycle:
 1. **Intake & Assignment**: User registers on mobile -> ChurchAdmin sees new applicant in `/church/members` directory -> ChurchAdmin assigns member to Counselor Sister Mary (`POST /api/church-admin/assign-counselor`).
-2. **Vetting Decision**: Member completes profile 100% -> Candidate appears in Sister Mary's priority queue (`/church/vetting`) -> Sister Mary evaluates 3 photos, intro video, and background in `/church/vetting/:id` -> Submits `approved` (or `denied` / `hard_blocked`). *Pastor can step in and action any dossier as auditor if needed.*
+2. **Vetting Decision**: Member completes profile 100% -> Candidate appears in Sister Mary's priority queue (`/church/vetting`) -> Sister Mary evaluates 3 photos, intro video, and background in `/church/vetting/:id` -> Submits `approved` (or `denied` / `hard_blocked`). *ChurchAdmin can step in and action any dossier as institutional head if needed.*
 3. **Active Courtship & Group Chat**: Two vetted users match on mobile -> System creates private couple chat and 3-way `counselor_group` chat (`/church/chats/:conversationId`) -> Both assigned counselors monitor communication and approve calendar events.
 4. **Relationship End & Exit Debrief**: If couple parts ways, candidate enters `DEBRIEF_REQUIRED` status -> Candidate is locked from mobile discovery -> Appears in Counselor's `/church/debriefs` queue -> Counselor conducts pastoral exit interview, enters notes and readiness score (`POST /api/vetting/users/:userId/debrief-reset`) -> User status resets to `VETTED_ACTIVE` and returns to mobile discovery.
 
@@ -883,14 +883,14 @@ Grounded in the product requirements (`guides/full_architecture.md §2, §4, §6
 
 ### 7.3 RBAC, Authentication & Routing Gates
 - **Architecture Standard (§2)**:
-  Four roles on Web: `SuperAdmin`, `ChurchAdmin`, `Counselor`, `Pastor`. User role is mobile-only. Layout gates must protect unauthorized route access and enforce the three-tier governance boundaries:
+  Clean 4-tier RBAC: `SuperAdmin`, `ChurchAdmin`, `Counselor`, `User`. User role is mobile-only. Layout gates protect unauthorized route access and enforce institutional governance boundaries:
   - **Counselor**: Day-to-day operations hub (Vetting Queue, Active Matches, 3-way Group Chats, Exit Debriefs). Full dossier access for assigned counselees.
-  - **ChurchAdmin**: Administrative parish management (Counselor management, member triage & assignment, church settings). Strictly firewalled from sensitive user data (salary, home address, match preferences, external match partner identity) and barred from running vetting decisions.
-  - **Pastor**: Executive overseer and spiritual auditor. Full church-wide dossier access (`/counselor/all-users`), authority to step in on vetting decisions or pastoral disputes, structurally excluded from dating discovery.
+  - **ChurchAdmin**: Institutional leader and parish administrator (creates and manages counselors, member triage & assignment, church settings, and escalation oversight). The leader's ecclesiastical title (e.g. Pastor, Priest, Imam, Minister, Reverend) is captured via a customizable `title` attribute. General administrative views enforce privacy safeguarding against sensitive dating data.
+  - **Structural Exclusion**: Both `ChurchAdmin` and `Counselor` have no profile relation to `UserProfile`, ensuring zero discovery appearance by schema design.
 - **Audit Findings**:
-  - **Missing Role Support**: `Pastor` is not handled in `App.jsx`, `ProtectedRoute.jsx`, or `DashboardRedirect`. A Pastor logging in is erroneously routed to `/login`.
-  - **User Role in Web App**: `App.jsx:L119` explicitly permits `User` role to access `/dashboard/user/:id?`, when Users should be rejected from the web app with a prompt directing them to download the mobile application.
-  - **Privacy Firewall Enforcement Missing in Client UI**: In `UserDashboard.jsx` and member tables, sensitive fields (salary, exact address, socials) are rendered regardless of whether the viewer is a `ChurchAdmin`, violating §2. Client-side profile inspection must conditionally render or redact these fields based on `user.role`.
+  - **Ecclesiastical Agnosticism**: The platform avoids denomination-specific role coupling by consolidating church leadership directly into `ChurchAdmin`, using the `title` attribute for specific honorifics.
+  - **User Role in Web App**: In early prototypes `User` role accessed web screens; this is now clarified as mobile-only, with informative landing notices on web.
+  - **Privacy Firewall Enforcement**: Delivered in `MemberDetailPage.jsx` and `userService.ts`, masking dating criteria and salary tiers for general administrative views.
 
 ### 7.4 Component Primitives & Styling
 - **Architecture Standard (§14)**:
@@ -984,7 +984,7 @@ To bring the frontend web application into full alignment with the new system ar
 2. **Privacy-Gated Member Profile Detail Page (`/church/members/:id`) (Completed)**:
    - Implemented in `src/pages/MemberDetailPage.jsx` mounted at `/church/members/:id`.
    - Privacy Firewall: Strictly enforces §2 RBAC by displaying an administrative view for `ChurchAdmin` with sensitive matchmaking criteria, financial salary tiers, and external match partners firewalled.
-   - Privileged View: Full spiritual counseling dossier, candidate gallery, video intro player, and vetting notes accessible to `Counselor`, `Pastor`, and `SuperAdmin`.
+   - Privileged View: Full spiritual counseling dossier, candidate gallery, video intro player, and vetting notes accessible to assigned `Counselor` and `SuperAdmin`.
    - Integrated "Assign / Reassign Counselor" modal with live counselor selection.
 3. **Counselor 3-Way Monitored Group Chat (`/church/chats` & `/church/chats/:conversationId`) (Completed)**:
    - Added `communicationService.js` and React Query hooks in `communication.js` (`useConversationsQuery`, `useConversationMessagesQuery`, `useSendMessageMutation`, `useCalendarEventsQuery`, `useRespondCalendarEventMutation`).
@@ -992,11 +992,11 @@ To bring the frontend web application into full alignment with the new system ar
    - Features: Split-pane conversation selector, 3-way monitored conversation thread with role badges (`Candidate A`, `Candidate B`, `Pastoral Counselor`), calendar meetup approval alerts, counselor spiritual guidance composer, and "Conclude Courtship & Mandate Debrief" action.
 4. **Parish Profile & Pastoral Settings (`/church/settings`) (Completed)**:
    - Implemented in `src/pages/ParishSettingsPage.jsx` mounted at `/church/settings`.
-   - Allows `ChurchAdmin` and `Pastor` to manage official church name, alias, address, parish email/phone, and Senior Pastor oversight details via `PUT /api/churches/:id`.
+   - Allows `ChurchAdmin` to manage official church name, alias, address, parish email/phone, and Senior Pastor oversight details via `PUT /api/churches/:id`.
 5. **Deprecation & Modernization of Misplaced Web Artifacts (Completed)**:
    - Removed obsolete manual match creation modal and action items from `CounselorDashboard.jsx` and `ChurchAdminDashboard.jsx`.
    - Modernized `SubscriptionPage.jsx` with `apiClient` and added an explicit architectural notice directing candidates to the native mobile app (React Native / Expo).
-   - Granted `Pastor` role counselor-level oversight in backend `userService.ts` and `vettingRoutes.ts`.
+   - Strict 4-tier RBAC (`SuperAdmin`, `ChurchAdmin`, `Counselor`, `User`) enforced across backend routes and services.
 
 ---
 

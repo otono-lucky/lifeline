@@ -8,37 +8,37 @@ const ALL_CHURCH_NAV_ITEMS = [
     path: "/church",
     exact: true,
     icon: "📊",
-    roles: ["ChurchAdmin", "Counselor", "Pastor", "SuperAdmin"],
+    roles: ["ChurchAdmin", "Counselor", "SuperAdmin"],
   },
   {
     label: "Member Directory",
     path: "/church/members",
     icon: "👥",
-    roles: ["ChurchAdmin", "Counselor", "Pastor", "SuperAdmin"],
+    roles: ["ChurchAdmin", "Counselor", "SuperAdmin"],
   },
   {
     label: "Vetting Queue",
     path: "/church/vetting",
     icon: "📋",
-    roles: ["Counselor", "Pastor", "SuperAdmin"],
+    roles: ["Counselor", "ChurchAdmin", "SuperAdmin"],
   },
   {
     label: "Active Matches",
     path: "/church/matches",
     icon: "💞",
-    roles: ["Counselor", "Pastor", "SuperAdmin"],
+    roles: ["Counselor", "ChurchAdmin", "SuperAdmin"],
   },
   {
     label: "Counselor Chats",
     path: "/church/chats",
     icon: "💬",
-    roles: ["Counselor", "Pastor", "SuperAdmin"],
+    roles: ["Counselor", "ChurchAdmin", "SuperAdmin"],
   },
   {
     label: "Exit Debriefs",
     path: "/church/debriefs",
     icon: "📝",
-    roles: ["Counselor", "Pastor", "SuperAdmin"],
+    roles: ["Counselor", "ChurchAdmin", "SuperAdmin"],
   },
   {
     label: "Counselors",
@@ -69,20 +69,24 @@ export const ChurchLayout = () => {
     return ALL_CHURCH_NAV_ITEMS.filter((item) => item.roles.includes(role));
   }, [user?.role]);
 
-  const getRoleBadge = (role) => {
+  const getRoleBadge = (role, title) => {
     switch (role) {
-      case "Pastor":
-        return { label: "Senior Pastor / Overseer", bg: "bg-amber-100 text-amber-800" };
       case "ChurchAdmin":
-        return { label: "Church Administrator", bg: "bg-blue-100 text-blue-800" };
+        return {
+          label: title ? `${title} (Church Admin)` : "Church Administrator",
+          bg: "bg-blue-100 text-blue-800",
+        };
       case "Counselor":
-        return { label: "Operational Counselor", bg: "bg-emerald-100 text-emerald-800" };
+        return {
+          label: "Operational Counselor",
+          bg: "bg-emerald-100 text-emerald-800",
+        };
       default:
         return { label: role || "Staff", bg: "bg-gray-100 text-gray-800" };
     }
   };
 
-  const roleBadge = getRoleBadge(user?.role);
+  const roleBadge = getRoleBadge(user?.role, user?.title);
 
   return (
     <div className="flex h-screen bg-gray-50">

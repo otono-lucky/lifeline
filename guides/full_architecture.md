@@ -17,7 +17,7 @@ Three components, one backend:
 │  (Daters / Users)     │      │  (SuperAdmin,             │
 │  React Native/Expo    │─────▶│   Unified Church          │────▶  Backend API
 └────────────────────┘      │   Dashboard: ChurchAdmin, │      (Node/Express/
-                              │   Counselor, Pastor)      │       Prisma/Postgres)
+                              │   Counselor)              │       Prisma/Postgres)
                               └─────────────────────────┘
 ```
 
@@ -30,27 +30,37 @@ All API responses use one envelope:
 
 ## 2. User Roles & RBAC Matrix
 
+The platform enforces a clean 4-tier role-based access control (RBAC) model:
+
 | Role | Created By | Has Dating Profile? | Appears in Discovery? | Portal |
 |---|---|---|---|---|
 | **SuperAdmin** | Seeded | No | No | Admin Web |
-| **ChurchAdmin** | SuperAdmin | No | No | Admin Web (Unified Dashboard) |
-| **Counselor** | ChurchAdmin/SuperAdmin | No | No | Admin Web (Unified Dashboard) |
-| **Pastor** | Captured at church onboarding, account created by ChurchAdmin/SuperAdmin | No | **No — structurally excluded** (Pastors have no row in the discovery-source table, so exclusion is guaranteed, not flag-based) | Admin Web (Unified Dashboard, read/audit-level access equal to Counselor) |
+| **ChurchAdmin** | SuperAdmin | No | **No — structurally excluded** (Institutional leaders have no row in `UserProfile`, guaranteeing zero appearance in discovery) | Admin Web (Unified Dashboard) |
+| **Counselor** | ChurchAdmin/SuperAdmin | No | **No — structurally excluded** | Admin Web (Unified Dashboard) |
 | **User** | Self sign-up | Yes | Yes, once `vetted_active` | Mobile App |
+
+> [!NOTE]
+> **Ecclesiastical & Denomination Agnosticism:**
+> Religious institutions and faith traditions vary widely in how they designate leadership (e.g. *Pastor*, *Priest*, *Reverend*, *Minister*, *Imam*, *Rabbi*, *General Overseer*, or *Parish Director*).
+> To prevent denomination-specific bias and rigid coupling, the head or spiritual leader of a parish is represented in the system as **`ChurchAdmin`**.
+> The leader's specific designation (e.g., `"Senior Pastor"`, `"Reverend Father"`, `"Resident Minister"`, `"Imam"`) is captured as a customizable `title` attribute on their profile, rather than a separate system permission level. There is no discrete `Pastor` system role enum.
 
 **Permission summary inside the Unified Church Dashboard:**
 
-| Data/Action | ChurchAdmin | Counselor | Pastor |
-|---|---|---|---|
-| Basic directory (name/photo) | ✅ | ✅ | ✅ |
-| Aggregated match counts | ✅ | ✅ | ✅ |
-| Search/match preferences | ❌ | ✅ (assigned users only) | ✅ |
-| External-church match partner identity | ❌ (hidden) | ✅ (assigned users only) | ✅ |
-| Salary, address, full social handles | ❌ | ✅ (assigned users only) | ✅ |
-| Assign member to counselor | ✅ | ❌ | ❌ |
-| Create/manage counselors | ✅ | ❌ | ❌ |
-| Run vetting decisions | ❌ | ✅ (assigned) | ✅ (any, as auditor) |
-| Excluded from being a match prospect | N/A | N/A | ✅ (by design) |
+| Data/Action | ChurchAdmin (Parish Leader & Admin) | Counselor (Operational Mentor) |
+|---|---|---|
+| Basic directory (name/photo) | ✅ | ✅ |
+| Aggregated match counts | ✅ | ✅ |
+| Search/match preferences | ❌ (Firewalled from administrative view) | ✅ (Assigned counselees only) |
+| External-church match partner identity | ❌ (Hidden) | ✅ (Assigned counselees only) |
+| Salary, address, full social handles | ❌ (Firewalled from administrative view) | ✅ (Assigned counselees only) |
+| Assign member to counselor | ✅ | ❌ |
+| Create/manage counselors | ✅ | ❌ |
+| Parish profile & settings | ✅ | ❌ |
+| Run vetting decisions | ✅ (Institutional oversight / escalation) | ✅ (Primary assigned queue) |
+| Conduct post-courtship exit debriefs | ✅ (Institutional oversight / escalation) | ✅ (Primary assigned counselees) |
+| 3-Way monitored couple chat | ✅ (Audit oversight) | ✅ (Assigned active courtships) |
+| Excluded from being a match prospect | ✅ (Structurally excluded by design) | ✅ (Structurally excluded by design) |
 
 ---
 
@@ -59,7 +69,7 @@ All API responses use one envelope:
 ### 3.1 Enums
 
 ```prisma
-enum Role { SuperAdmin ChurchAdmin Counselor Pastor User }
+enum Role { SuperAdmin ChurchAdmin Counselor User }
 enum AccountStatus { active suspended }
 enum ChurchOnboardingType { ParentBranch Independent }
 enum ChurchStatus { pending active suspended }
@@ -105,7 +115,6 @@ model Account {
   superAdmin  SuperAdmin?
   churchAdmin ChurchAdmin?
   counselor   Counselor?
-  pastor      Pastor?
   user        UserProfile?
 }
 
@@ -120,6 +129,7 @@ model ChurchAdmin {
   id        String  @id @default(uuid())
   accountId String  @unique
   churchId  String
+  title     String? // Ecclesiastical/leadership designation e.g. "Senior Pastor", "Reverend", "Imam", "Director"
   account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
   church    Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
 }
@@ -133,15 +143,6 @@ model Counselor {
 
   assignedUsers UserProfile[]  @relation("CounselorAssignments")
   vettingLogs   VettingLog[]
-}
-
-model Pastor {
-  id        String  @id @default(uuid())
-  accountId String  @unique
-  churchId  String
-  account   Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  church    Church  @relation(fields: [churchId], references: [id], onDelete: Cascade)
-  // No dating profile relation — structurally cannot appear in discovery.
 }
 ```
 
@@ -163,10 +164,11 @@ model Church {
   latitude  Float?
   longitude Float?
 
-  // Senior Pastor details captured at onboarding time
-  pastorName  String?
-  pastorEmail String?
-  pastorPhone String?
+  // Institutional head/leader details captured at onboarding time
+  pastorName  String? // Leader's full name
+  pastorEmail String? // Leader's contact email
+  pastorPhone String? // Leader's phone number
+  leaderTitle String? // Ecclesiastical title (e.g. "Senior Pastor", "Reverend Father", "Imam", "Director")
 
   status    ChurchStatus @default(pending)
   createdBy String
@@ -176,7 +178,6 @@ model Church {
 
   churchAdmins ChurchAdmin[]
   counselors   Counselor[]
-  pastors      Pastor[]
   members      UserProfile[]
 }
 ```
@@ -431,10 +432,9 @@ model Notification {
 | Step | Actor | Detail |
 |---|---|---|
 | 1 | SuperAdmin | Creates `Church` — picks `onboardingType`. If `ParentBranch`, sets `isParentOrg = true` (one-time, e.g. "RCCG"). If `Independent`, one row per physical parish. |
-| 2 | SuperAdmin | Captures Senior Pastor details on the same form (`pastorName/Email/Phone`). |
-| 3 | SuperAdmin | Creates the first `ChurchAdmin` account for that church directly (sets credentials). |
-| 4 | ChurchAdmin | Logs in, creates `Counselor` account(s) directly. |
-| 5 | ChurchAdmin or SuperAdmin | Creates the `Pastor` account, linked to the captured pastor details, with Counselor-equivalent dashboard permissions. |
+| 2 | SuperAdmin | Captures Church Leader details on the same form (`pastorName/Email/Phone` and `leaderTitle`). |
+| 3 | SuperAdmin | Creates the 1:1 `ChurchAdmin` account for the parish leader directly (sets credentials and ecclesiastical `title`). |
+| 4 | ChurchAdmin | Logs in to the Unified Church Dashboard, creates `Counselor` account(s) directly, assigns counselees, and oversees parish activities. |
 
 ---
 
@@ -465,7 +465,7 @@ draft ──(100% complete)──▶ pending_vetting ──(counselor approves)�
                                                                               denied   → stays hard_blocked
 ```
 
-Only a `Counselor` (or `Pastor`, as auditor) assigned to the user can action `pending_vetting`. Only a `SuperAdmin` can resolve an `AppealCase`.
+Only an assigned `Counselor` (or `ChurchAdmin` with institutional oversight authority) can action `pending_vetting`. Only a `SuperAdmin` can resolve an `AppealCase`.
 
 ---
 
@@ -544,7 +544,7 @@ On `Match` creation:
 3. Platform Dashboard 4. Church List 5. Create Church (onboarding-type selector + Pastor capture) 6. Church Detail/Edit 7. Create ChurchAdmin 8. Appeals Queue 9. Appeal Detail & Resolution 10. Subscription/Revenue Analytics
 
 ### C. Unified Church Dashboard (shared shell — content gated by role per §2 permission matrix)
-11. Dashboard Home 12. Member Directory 13. Member Profile Detail (fields shown vary by role) 14. Assign Counselor (ChurchAdmin) 15. Counselor Management (ChurchAdmin) 16. Pastor Assignment (ChurchAdmin/SuperAdmin) 17. Vetting Queue (Counselor/Pastor) 18. Vetting Review & Decision (Counselor/Pastor) 19. Active Matches Oversight (Counselor) 20. Counselor Group Chat (Counselor side) 21. Status Reset Debrief Queue (Counselor) 22. Church Profile Settings
+11. Dashboard Home 12. Member Directory 13. Member Profile Detail (fields shown vary by role) 14. Assign Counselor (ChurchAdmin) 15. Counselor Management (ChurchAdmin) 16. Church Leadership & Staff Oversight (ChurchAdmin) 17. Vetting Queue (Counselor/ChurchAdmin) 18. Vetting Review & Decision (Counselor/ChurchAdmin) 19. Active Matches Oversight (Counselor) 20. Counselor Group Chat (Counselor side) 21. Status Reset Debrief Queue (Counselor) 22. Church Profile Settings
 
 ---
 
@@ -571,11 +571,10 @@ All endpoints require `Authorization: Bearer {token}` unless marked **Public**. 
 | GET | `/churches` | SuperAdmin | `?onboardingType=&status=` |
 | GET | `/churches/parent-orgs` | Public | Dropdown source for ParentBranch signup step |
 | GET | `/churches/search?q=` | Public | Parish search for Independent signup step |
-| GET | `/churches/:id` | SuperAdmin, own ChurchAdmin/Counselor/Pastor | |
-| PUT | `/churches/:id` | SuperAdmin | |
+| GET | `/churches/:id` | SuperAdmin, own ChurchAdmin/Counselor | |
+| PUT | `/churches/:id` | SuperAdmin, own ChurchAdmin | |
 | POST | `/churches/:id/church-admins` | SuperAdmin | Direct creation, see §12.6 |
 | POST | `/churches/:id/counselors` | ChurchAdmin, SuperAdmin | Direct creation |
-| POST | `/churches/:id/pastors` | ChurchAdmin, SuperAdmin | Direct creation |
 
 ### 12.3 User Profile (Onboarding steps — each PUT is one resumable step)
 | Method | Path | Access | Notes |
@@ -595,9 +594,9 @@ All endpoints require `Authorization: Bearer {token}` unless marked **Public**. 
 ### 12.4 Vetting
 | Method | Path | Access | Notes |
 |---|---|---|---|
-| GET | `/vetting/queue` | Counselor, Pastor | Assigned users with `status=pending_vetting` |
-| GET | `/vetting/:userId` | Counselor, Pastor | Full profile incl. hidden fields |
-| POST | `/vetting/:userId/decide` | Counselor, Pastor | See §12.6 |
+| GET | `/vetting/queue` | Counselor, ChurchAdmin | Assigned users with `status=pending_vetting` |
+| GET | `/vetting/:userId` | Counselor, ChurchAdmin | Full profile incl. hidden fields |
+| POST | `/vetting/:userId/decide` | Counselor, ChurchAdmin | See §12.6 |
 | POST | `/appeals` | User | Submit appeal while `hard_blocked` |
 | GET | `/appeals` | SuperAdmin | Queue |
 | POST | `/appeals/:id/resolve` | SuperAdmin | approve/deny |
@@ -636,14 +635,14 @@ All endpoints require `Authorization: Bearer {token}` unless marked **Public**. 
 | POST | `/subscriptions/cancel` | User | |
 | GET | `/subscriptions/billing-history` | User | |
 
-### 12.8 Church Admin / Counselor / Pastor Dashboard
+### 12.8 Church Admin / Counselor Dashboard
 | Method | Path | Access | Notes |
 |---|---|---|---|
 | GET | `/church-admin/dashboard` | ChurchAdmin | |
 | GET | `/church-admin/members` | ChurchAdmin | Basic-directory fields only per privacy tier |
 | POST | `/church-admin/assign-counselor` | ChurchAdmin | body: `{userId, counselorId}` |
-| GET | `/counselor/dashboard` | Counselor, Pastor | |
-| GET | `/counselor/assigned-users` | Counselor | Pastor uses `/counselor/all-users` (auditor, church-wide) |
+| GET | `/counselor/dashboard` | Counselor, ChurchAdmin | |
+| GET | `/counselor/assigned-users` | Counselor, ChurchAdmin | ChurchAdmin views church-wide |
 | GET | `/counselor/active-matches` | Counselor | |
 | GET | `/admin/dashboard` | SuperAdmin | Platform-wide stats |
 
@@ -779,7 +778,7 @@ Response:
 
 ## 15. Suggested Build Sequencing
 
-1. **Foundation:** Auth, Church CRUD (both onboarding types), ChurchAdmin/Counselor/Pastor direct creation
+1. **Foundation:** Auth, Church CRUD (both onboarding types), ChurchAdmin/Counselor direct creation
 2. **Profile enrichment:** All onboarding step endpoints + completion-gate logic + mobile onboarding screens
 3. **Vetting:** Queue, decision endpoint, state machine, denied/hard-blocked/appeal flows
 4. **Discovery & Matching:** Feed, slot-limited requests, blind rejection, concurrency resolution
@@ -792,5 +791,5 @@ Response:
 ## 16. Open Design Decisions (flagged, not resolved by the source PRD)
 
 - **ParentBranch counselor assignment:** since branch is free text, all counselors for a ParentBranch org (e.g. RCCG) form one shared pool. If this needs to scale (RCCG has thousands of parishes), a future phase should consider formalizing branches as child `Church` records with `parentChurchId` — the schema in §3.3 deliberately avoids this for MVP per the PRD's "onboarded once" instruction, but the migration path exists if needed.
-- **Pastor's own marital status:** the PRD doesn't address whether a Pastor account can *also* independently hold a `UserProfile` (e.g. an unmarried pastor). Current design: Pastor role has no profile relation at all — if this is wrong, it needs explicit product sign-off since it changes the schema.
+- **Institutional Leadership & Religious Agnosticism (Resolved):** Faith communities and traditions use varied titles for leadership (e.g., Pastor, Priest, Imam, Minister, Reverend, Elder). The system models the organizational leader directly as `ChurchAdmin`, utilizing a customizable `title` attribute on their profile rather than an ecclesiastical-specific role. Both `ChurchAdmin` and `Counselor` have no profile relation to `UserProfile`, ensuring strict structural exclusion from matchmaking discovery.
 - **Subscription enforcement point:** the source PRD mandates subscription for "uninterrupted access" during vetting/matching but doesn't specify exactly which endpoints are paywalled pre-vetting vs post-vetting. Recommend: subscription required starting at `pending_vetting → vetted_active` transition (i.e., you can build your profile for free, but need an active subscription to enter discovery) — confirm before building payment gating.

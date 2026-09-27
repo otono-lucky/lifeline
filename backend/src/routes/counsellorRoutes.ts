@@ -30,7 +30,6 @@ const router = express.Router();
 const requireCounselorOrHigher = requireRole([
   "Counselor",
   "ChurchAdmin",
-  "Pastor",
   "SuperAdmin",
 ]);
 
