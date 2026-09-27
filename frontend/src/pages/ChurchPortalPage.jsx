@@ -9,7 +9,7 @@ import ParishSettingsPage from "./ParishSettingsPage";
 /**
  * ChurchPortalPage routes the unified /church/* views dynamically based on:
  * 1. The current route section (overview, members, vetting, counselors, matches, debriefs, settings)
- * 2. The logged-in user's role (ChurchAdmin, Counselor, Pastor, SuperAdmin)
+ * 2. The logged-in user's role (ChurchAdmin, Counselor, SuperAdmin)
  */
 export const ChurchPortalPage = ({ section = "overview" }) => {
   const { user } = useAuth();

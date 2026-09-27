@@ -1056,16 +1056,19 @@ const SuperAdminDashboard = ({ bare = false, defaultTab = null }) => {
             required
           >
             <option value="">Select Church</option>
-            {churchesForSelect.map((church) => (
-              <option key={church.id} value={church.id}>
-                {church.officialName}
-              </option>
-            ))}
+            {churchesForSelect.map((church) => {
+              const hasAdmin = Boolean(church.churchAdmin);
+              return (
+                <option key={church.id} value={church.id} disabled={hasAdmin}>
+                  {church.officialName} {hasAdmin ? "(Admin Assigned — 1:1 Limit)" : ""}
+                </option>
+              );
+            })}
           </select>
 
           <input
             type="text"
-            placeholder="Pastoral Title (e.g. Senior Pastor, Resident Pastor, Reverend)"
+            placeholder="Leadership Title (e.g. Senior Pastor, Reverend Father, Imam, Resident Minister)"
             className="w-full px-4 py-2 border border-gray-300 rounded-lg"
             value={adminForm.title}
             onChange={(e) =>

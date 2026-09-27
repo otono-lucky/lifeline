@@ -208,7 +208,9 @@ export default function RequestsScreen() {
             {activeList.map((req) => {
               const profile = tab === "sent" ? req.receiver : req.sender;
               const name = profile?.firstName || (tab === "sent" ? "Recipient" : "Sender");
-              const photo = profile?.photos?.[0]?.photoUrl;
+              const photo =
+                profile?.photos?.[0]?.photoUrl ||
+                profile?.photos?.[0]?.url;
               const isMutating =
                 (acceptMutation.isPending && acceptMutation.variables === req.id) ||
                 (declineMutation.isPending && declineMutation.variables === req.id) ||

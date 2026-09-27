@@ -25,18 +25,18 @@ router.use(authMiddleware);
 router.get("/appeals", requireRole(["SuperAdmin"]), listAppeals);
 router.get("/appeals/:appealId", requireRole(["SuperAdmin"]), getAppeal);
 
-// Counselor & Pastor reviews
+// Counselor & ChurchAdmin reviews
 router.post(
   "/users/:userId/review",
-  requireRole(["Counselor", "Pastor", "SuperAdmin"]),
+  requireRole(["Counselor", "ChurchAdmin", "SuperAdmin"]),
   validateBody(VettingReviewSchema),
   reviewVetting,
 );
 
-// Counselor-Mediated Status Reset
+// Counselor & ChurchAdmin Status Reset
 router.post(
   "/users/:userId/debrief-reset",
-  requireRole(["Counselor", "Pastor", "SuperAdmin"]),
+  requireRole(["Counselor", "ChurchAdmin", "SuperAdmin"]),
   validateBody(DebriefResetSchema),
   debriefReset,
 );

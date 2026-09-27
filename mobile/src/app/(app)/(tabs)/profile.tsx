@@ -48,7 +48,10 @@ export default function ProfileScreen() {
   };
 
   const fullName = `${user?.firstName || "Faith"} ${user?.lastName || "Believer"}`;
-  const primaryPhoto = user?.photos?.[0]?.photoUrl;
+  const primaryPhoto =
+    user?.profilePictureUrl ||
+    user?.photos?.[0]?.photoUrl ||
+    user?.photos?.[0]?.url;
   const isPremium = user?.subscriptionTier === "premium";
 
   return (
@@ -162,6 +165,7 @@ export default function ProfileScreen() {
           {[0, 1, 2].map((idx) => {
             const photo =
               user?.photos?.[idx]?.photoUrl ||
+              user?.photos?.[idx]?.url ||
               "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500";
             return (
               <View

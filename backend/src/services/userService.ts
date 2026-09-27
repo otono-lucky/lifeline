@@ -205,11 +205,9 @@ export const getUserById = async (
 
   const isSelf = targetAccountId === requesterAccountId;
   const isSuperAdmin = requesterRole === "SuperAdmin";
-  const isPastor = requesterRole === "Pastor";
   const isAssignedCounselor =
-    (requesterRole === "Counselor" &&
-      row.assignedCounselor?.accountId === requesterAccountId) ||
-    isPastor;
+    requesterRole === "Counselor" &&
+    row.assignedCounselor?.accountId === requesterAccountId;
 
   const completion = calculateProfileCompletion({
     ...row,

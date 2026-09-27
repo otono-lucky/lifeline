@@ -15,9 +15,15 @@ export default function EventSchedulerModal() {
   const { matchId } = useLocalSearchParams<{ matchId: string }>();
   const router = useRouter();
 
+  const getTomorrowDate = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().split("T")[0];
+  };
+
   const [title, setTitle] = useState("First Faith & Intentionality Call");
   const [description, setDescription] = useState("Getting to know each other over structured video conversation.");
-  const [date, setDate] = useState("2026-09-01");
+  const [date, setDate] = useState(getTomorrowDate());
   const [time, setTime] = useState("19:00");
   const [meetingLink, setMeetingLink] = useState("https://meet.google.com/lifeline-session");
   const [isSubmitting, setIsSubmitting] = useState(false);
