@@ -50,4 +50,10 @@ export const churchAdminService = {
     });
     return response.data;
   },
+
+  // Update church admin profile / title
+  updateProfile: async (accountId, data) => {
+    const response = await apiClient.put(`/church-admin/${accountId}`, data);
+    return response.data;
+  },
 };

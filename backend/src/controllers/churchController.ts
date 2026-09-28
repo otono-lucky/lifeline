@@ -13,6 +13,7 @@ import {
 import { prisma } from "../config/db";
 import { errorResponse, successResponse } from "../utils/responseHandler";
 import { Params } from "../types/express";
+import { uploadProfileImageToCloudinary } from "../services/mediaService";
 
 /**
  * @desc    Create a new church
@@ -22,7 +23,7 @@ import { Params } from "../types/express";
 export const create = async (req: Request, res: Response) => {
   console.log("[POST /api/churches] Starting - Email:", req.body?.email);
   try {
-    const { officialName, aka, email, phone, state, lga, city, address } =
+    const { officialName, aka, logoUrl, email, phone, state, lga, city, address } =
       req.body;
 
     // Validation
@@ -50,6 +51,7 @@ export const create = async (req: Request, res: Response) => {
     const church = await createChurch({
       officialName,
       aka,
+      logoUrl,
       email,
       phone,
       state,
@@ -225,11 +227,26 @@ export const update = async (req: Request, res: Response) => {
   console.log("[PUT /api/churches/:id] Starting - Id:", req.params?.id);
   try {
     const id = String(req.params?.id);
-    const { officialName, aka, phone, state, lga, city, address } = req.body;
+
+    // ChurchAdmin can only update their own church
+    if (req.account?.role === "ChurchAdmin") {
+      const admin = await prisma.churchAdmin.findUnique({
+        where: { accountId: req.account.id },
+      });
+      if (!admin || admin.churchId !== id) {
+        return res
+          .status(403)
+          .json(errorResponse("Access denied. You can only update your own parish."));
+      }
+    }
+
+    const { officialName, aka, logoUrl, email, phone, state, lga, city, address } = req.body;
 
     const church = await updateChurch(id, {
       officialName,
       aka,
+      logoUrl,
+      email,
       phone,
       state,
       lga,
@@ -244,5 +261,52 @@ export const update = async (req: Request, res: Response) => {
     res
       .status(500)
       .json(errorResponse(error.message || "Server error updating church"));
+  }
+};
+
+/**
+ * @desc    Upload church logo
+ * @route   POST /api/churches/:id/logo
+ * @access  SuperAdmin, ChurchAdmin (own church)
+ */
+export const uploadLogo = async (req: Request, res: Response) => {
+  console.log("[POST /api/churches/:id/logo] Starting - Id:", req.params?.id);
+  try {
+    const id = String(req.params?.id);
+
+    if (req.account?.role === "ChurchAdmin") {
+      const admin = await prisma.churchAdmin.findUnique({
+        where: { accountId: req.account.id },
+      });
+      if (!admin || admin.churchId !== id) {
+        return res
+          .status(403)
+          .json(errorResponse("Access denied. You can only upload a logo for your own parish."));
+      }
+    }
+
+    if (!req.file) {
+      return res.status(400).json(errorResponse("No image file provided"));
+    }
+
+    const uploadResult = await uploadProfileImageToCloudinary(req.file.buffer);
+
+    const church = await updateChurch(id, {
+      logoUrl: uploadResult.secureUrl,
+    });
+
+    console.log("[POST /api/churches/:id/logo] Success - LogoUrl:", uploadResult.secureUrl);
+
+    res.json(
+      successResponse("Church logo uploaded successfully", {
+        church,
+        logoUrl: uploadResult.secureUrl,
+      }),
+    );
+  } catch (error: any) {
+    console.error("[POST /api/churches/:id/logo] Failed:", error.message);
+    res
+      .status(500)
+      .json(errorResponse(error.message || "Server error uploading church logo"));
   }
 };

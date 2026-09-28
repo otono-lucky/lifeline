@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useChurchQuery } from "../api/queries/churches";
 
 const ALL_CHURCH_NAV_ITEMS = [
   {
@@ -59,6 +60,13 @@ export const ChurchLayout = () => {
   const navigate = useNavigate();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
+  // Resolve church identity for organizational context
+  const resolvedChurchId = user?.churchId;
+  const churchQuery = useChurchQuery(resolvedChurchId, {
+    enabled: Boolean(resolvedChurchId),
+  });
+  const church = churchQuery.data?.data?.church;
+
   const handleLogout = () => {
     logout();
     navigate("/login");
@@ -105,13 +113,27 @@ export const ChurchLayout = () => {
           showMobileMenu ? "block" : "hidden"
         } md:flex flex-col fixed md:static inset-y-0 left-0 w-64 bg-white border-r border-gray-200 z-30`}
       >
-        {/* Brand header */}
-        <div className="p-6 border-b border-gray-100">
-          <div className="flex items-center gap-2">
-            <span className="text-2xl">🕊️</span>
-            <div>
-              <h1 className="text-xl font-bold text-blue-600 leading-tight">Lifeline</h1>
-              <p className="text-xs font-semibold text-gray-400 tracking-wide uppercase">Church Portal</p>
+        {/* Brand header with Church Logo & Name */}
+        <div className="p-4 border-b border-gray-100 bg-gradient-to-r from-blue-50/50 to-indigo-50/30">
+          <div className="flex items-center gap-3">
+            {church?.logoUrl ? (
+              <img
+                src={church.logoUrl}
+                alt={church.officialName || "Parish Logo"}
+                className="w-10 h-10 rounded-xl object-cover border border-blue-200 shadow-xs shrink-0"
+              />
+            ) : (
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center text-xl shadow-xs shrink-0">
+                🏛️
+              </div>
+            )}
+            <div className="min-w-0 flex-1">
+              <h1 className="text-sm font-bold text-gray-900 leading-tight truncate">
+                {church?.officialName || "Lifeline Parish"}
+              </h1>
+              <p className="text-[11px] font-semibold text-blue-600 tracking-wide uppercase truncate">
+                {church?.aka || (church?.city ? `${church.city}` : "Pastoral Desk")}
+              </p>
             </div>
           </div>
         </div>
@@ -164,19 +186,48 @@ export const ChurchLayout = () => {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
-          <div className="flex items-center gap-3">
-            <span
-              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${roleBadge.bg}`}
-            >
-              {roleBadge.label}
-            </span>
+        {/* Top Header with Church Banner */}
+        <header className="bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between z-10 shadow-xs">
+          <div className="flex items-center gap-3 min-w-0">
+            {church?.logoUrl ? (
+              <img
+                src={church.logoUrl}
+                alt=""
+                className="w-8 h-8 rounded-lg object-cover border border-gray-200 shrink-0"
+              />
+            ) : (
+              <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-sm font-bold shrink-0">
+                🏛️
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-gray-900 truncate max-w-xs sm:max-w-md">
+                  {church?.officialName || "Parish Pastoral Portal"}
+                </span>
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold ${roleBadge.bg}`}
+                >
+                  {roleBadge.label}
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 truncate">
+                {church?.city ? `${church.city}, ` : ""}{church?.state || "Active Parish"}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 shrink-0">
+            {user?.role === "ChurchAdmin" && (
+              <NavLink
+                to="/church/settings"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:text-blue-600 bg-gray-100 hover:bg-blue-50 rounded-lg transition-colors border border-gray-200"
+              >
+                ⚙️ Parish Settings
+              </NavLink>
+            )}
             <button
               onClick={handleLogout}
-              className="px-3.5 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200 hover:border-red-300"
+              className="px-3.5 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200 hover:border-red-300"
             >
               Sign out
             </button>

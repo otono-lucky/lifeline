@@ -7,6 +7,7 @@ export const CreateChurchSchema = z
   .object({
     officialName: z.string().min(2).openapi({ example: "Redeemed Christian Church of God" }),
     aka: z.string().optional().openapi({ example: "RCCG" }),
+    logoUrl: z.string().optional().nullable().openapi({ example: "https://res.cloudinary.com/..." }),
     country: z.string().min(2).openapi({ example: "Nigeria" }),
     state: z.string().min(2).openapi({ example: "Lagos" }),
     city: z.string().optional().openapi({ example: "Ikeja" }),
@@ -21,6 +22,12 @@ export const UpdateChurchSchema = z
   .object({
     officialName: z.string().optional().openapi({ example: "RCCG City of David" }),
     aka: z.string().optional().openapi({ example: "City of David" }),
+    logoUrl: z.string().optional().nullable().openapi({ example: "https://res.cloudinary.com/..." }),
+    phone: z.string().optional().openapi({ example: "+2348011223344" }),
+    email: z.string().email().optional().openapi({ example: "contact@cityofdavidng.org" }),
+    state: z.string().optional().openapi({ example: "Lagos" }),
+    city: z.string().optional().openapi({ example: "Victoria Island" }),
+    lga: z.string().optional().openapi({ example: "Eti-Osa" }),
     address: z.string().optional().openapi({ example: "Victoria Island, Lagos" }),
     status: z.enum(["active", "suspended", "pending"]).optional().openapi({ example: "active" }),
   })

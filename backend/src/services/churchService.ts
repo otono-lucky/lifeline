@@ -7,6 +7,7 @@ import { prisma } from "../config/db";
 interface CreateChurchData {
   officialName: string;
   aka?: string;
+  logoUrl?: string;
   churchModel?: ChurchModelType;
   email: string;
   phone: string;
@@ -33,6 +34,7 @@ export const createChurch = async (data: CreateChurchData) => {
     data: {
       officialName: data.officialName,
       aka: data.aka,
+      logoUrl: data.logoUrl,
       churchModel: data.churchModel || "INDIVIDUAL_PARISH",
       email: data.email,
       phone: data.phone,
@@ -297,7 +299,9 @@ export const updateChurch = async (
     data: {
       officialName: data.officialName,
       aka: data.aka,
+      logoUrl: data.logoUrl,
       churchModel: data.churchModel,
+      email: data.email,
       phone: data.phone,
       state: data.state,
       lga: data.lga,

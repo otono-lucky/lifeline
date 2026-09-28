@@ -286,6 +286,7 @@ model Church {
   id           String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   officialName String
   aka          String?
+  logoUrl      String?         // Parish brand emblem / logo URL
   churchModel  ChurchModelType @default(INDIVIDUAL_PARISH)
   email        String          @unique
   phone        String
