@@ -77,3 +77,21 @@ export const useDebriefResetMutation = (options = {}) => {
     ...restOptions,
   });
 };
+
+export const useUpdateCounselorProfileMutation = (options = {}) => {
+  const queryClient = useQueryClient();
+  const { onSuccess, ...restOptions } = options;
+
+  return useMutation({
+    mutationFn: ({ accountId, data }) =>
+      counselorService.updateCounselor(accountId, data),
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.auth.me() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.counselor.all });
+      if (onSuccess) {
+        onSuccess(data, variables, context);
+      }
+    },
+    ...restOptions,
+  });
+};

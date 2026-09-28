@@ -60,3 +60,21 @@ export const useAssignCounselorMutation = (options = {}) => {
     ...restOptions,
   });
 };
+
+export const useUpdateChurchAdminProfileMutation = (options = {}) => {
+  const queryClient = useQueryClient();
+  const { onSuccess, ...restOptions } = options;
+
+  return useMutation({
+    mutationFn: ({ accountId, data }) =>
+      churchAdminService.updateProfile(accountId, data),
+    onSuccess: (data, variables, context) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.auth.me() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.churchAdmin.all });
+      if (onSuccess) {
+        onSuccess(data, variables, context);
+      }
+    },
+    ...restOptions,
+  });
+};

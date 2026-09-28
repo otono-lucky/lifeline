@@ -84,3 +84,24 @@ export const useActivateChurchMutation = (options = {}) => {
     ...restOptions,
   });
 };
+
+export const useUploadChurchLogoMutation = (options = {}) => {
+  const queryClient = useQueryClient();
+  const { onSuccess, ...restOptions } = options;
+
+  return useMutation({
+    mutationFn: ({ id, file }) => churchService.uploadLogo(id, file),
+    onSuccess: (data, variables, context) => {
+      if (variables?.id) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.churches.detail(variables.id),
+        });
+      }
+      queryClient.invalidateQueries({ queryKey: ["churches", "list"] });
+      if (onSuccess) {
+        onSuccess(data, variables, context);
+      }
+    },
+    ...restOptions,
+  });
+};

@@ -42,4 +42,14 @@ export const churchService = {
     const response = await apiClient.get(`/churches/${id}/members`, { params });
     return response.data;
   },
+
+  // Upload church logo
+  uploadLogo: async (id, file) => {
+    const formData = new FormData();
+    formData.append("image", file);
+    const response = await apiClient.post(`/churches/${id}/logo`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
 };
